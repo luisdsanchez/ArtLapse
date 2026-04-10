@@ -3,6 +3,7 @@ import ctypes
 import os
 import re
 import shutil
+import threading
 from tkinter import filedialog
 from PIL import Image
 
@@ -16,6 +17,312 @@ from constants import (
 ctk.set_appearance_mode("dark")
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  WINDOW / SCREEN PICKER POPUP
+# ══════════════════════════════════════════════════════════════════════════════
+
+class WindowPickerPopup(ctk.CTkToplevel):
+    _POPUP_W = 500
+    _POPUP_H = 460
+    _CARD_W  = 152    # (500 - 14*2 - 8*2) // 3
+    _THUMB_W = 148    # CARD_W - 4
+    _THUMB_H = 84     # ≈ 16:9
+    _CARD_H  = 116    # THUMB_H + bottom + padding
+    _COLS    = 3
+    _PAD     = 14
+    _GAP     = 8
+
+    def __init__(self, parent: ctk.CTk, current_target: "dict | None", on_select):
+        super().__init__(parent)
+        self.overrideredirect(True)
+        self.configure(fg_color=BG_COLOR)
+        self.wm_attributes("-topmost", True)
+
+        self._on_select  = on_select
+        self._cur_target = current_target
+        self._card_data  = []       # list of (card_frame, info_dict)
+        self._drag_ox    = 0
+        self._drag_oy    = 0
+
+        # Center on parent
+        px = parent.winfo_x() + (APP_W       - self._POPUP_W) // 2
+        py = parent.winfo_y() + max(0, (APP_H - self._POPUP_H) // 2)
+        self.geometry(f"{self._POPUP_W}x{self._POPUP_H}+{px}+{py}")
+
+        self._build_ui()
+        self.after(20, self._apply_round)
+        self.grab_set()
+
+        threading.Thread(target=self._load_data, daemon=True).start()
+
+    def _apply_round(self):
+        hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+        rgn  = ctypes.windll.gdi32.CreateRoundRectRgn(
+            0, 0, self._POPUP_W, self._POPUP_H, 14, 14)
+        ctypes.windll.user32.SetWindowRgn(hwnd, rgn, True)
+
+    # ── UI construction ───────────────────────────────────────────────────────
+
+    def _build_ui(self):
+        # Title bar
+        tbar = ctk.CTkFrame(self, fg_color=CARD_COLOR, height=42, corner_radius=0)
+        tbar.pack(fill="x")
+        tbar.pack_propagate(False)
+        tbar.bind("<Button-1>",  self._drag_start)
+        tbar.bind("<B1-Motion>", self._drag_move)
+
+        ctk.CTkLabel(
+            tbar, text="SELECT CAPTURE TARGET",
+            font=("Arial", 10, "bold"), text_color="#666666",
+        ).place(relx=0.5, rely=0.5, anchor="center")
+
+        btn_area = ctk.CTkFrame(tbar, fg_color="transparent")
+        btn_area.place(relx=1.0, rely=0.5, anchor="e", x=-6)
+
+        ctk.CTkButton(
+            btn_area, text="↺", width=30, height=30,
+            fg_color="transparent", hover_color="#333333",
+            font=("Arial", 15, "bold"), text_color="#888888",
+            command=self._reload,
+        ).pack(side="left", padx=(0, 2))
+
+        ctk.CTkButton(
+            btn_area, text="✕", width=30, height=30,
+            fg_color="transparent", hover_color="#c42b1c",
+            font=("Arial", 13, "bold"),
+            command=self.destroy,
+        ).pack(side="left")
+
+        # Scrollable content
+        self._scroll = ctk.CTkScrollableFrame(
+            self, fg_color="transparent",
+            scrollbar_button_color="#333333",
+            scrollbar_button_hover_color="#555555",
+        )
+        self._scroll.pack(fill="both", expand=True)
+
+        self._status_lbl = ctk.CTkLabel(
+            self._scroll, text="Loading…",
+            font=("Arial", 11), text_color="#555555",
+        )
+        self._status_lbl.pack(pady=30)
+
+    def _drag_start(self, event):
+        self._drag_ox = event.x_root - self.winfo_x()
+        self._drag_oy = event.y_root - self.winfo_y()
+
+    def _drag_move(self, event):
+        self.geometry(f"+{event.x_root - self._drag_ox}+{event.y_root - self._drag_oy}")
+
+    # ── Data loading ──────────────────────────────────────────────────────────
+
+    def _load_data(self):
+        try:
+            monitors = capture.get_monitors()
+            windows  = capture.get_visible_windows()
+            self.after(0, lambda: self._populate(monitors, windows))
+        except Exception as e:
+            self.after(0, lambda err=e: self._status_lbl.configure(text=f"Error: {err}"))
+
+    def _reload(self):
+        for card, _ in self._card_data:
+            if card.winfo_exists():
+                card.destroy()
+        self._card_data.clear()
+
+        for w in list(self._scroll.winfo_children()):
+            w.destroy()
+
+        self._status_lbl = ctk.CTkLabel(
+            self._scroll, text="Loading…",
+            font=("Arial", 11), text_color="#555555",
+        )
+        self._status_lbl.pack(pady=30)
+
+        threading.Thread(target=self._load_data, daemon=True).start()
+
+    def _populate(self, monitors: list, windows: list):
+        if not self.winfo_exists():
+            return
+        self._status_lbl.destroy()
+
+        # ── SCREENS ──────────────────────────────────────────────────────────
+        screens_wrap = ctk.CTkFrame(self._scroll, fg_color="transparent")
+        screens_wrap.pack(fill="x", padx=self._PAD, pady=(10, 0))
+
+        ctk.CTkLabel(
+            screens_wrap, text="SCREENS",
+            font=("Arial", 9, "bold"), text_color="#555555", anchor="w",
+        ).pack(anchor="w", pady=(0, 6))
+
+        screens_row = ctk.CTkFrame(screens_wrap, fg_color="transparent")
+        screens_row.pack(fill="x")
+
+        for col, mon in enumerate(monitors):
+            card = self._make_card(screens_row, mon)
+            card.grid(row=0, column=col,
+                      padx=(0 if col == 0 else self._GAP, 0), sticky="nw")
+            self._card_data.append((card, mon))
+            self._launch_screen_thumb(card, mon)
+
+        # ── APPLICATIONS ─────────────────────────────────────────────────────
+        apps_wrap = ctk.CTkFrame(self._scroll, fg_color="transparent")
+        apps_wrap.pack(fill="x", padx=self._PAD, pady=(14, 12))
+
+        ctk.CTkLabel(
+            apps_wrap, text="APPLICATIONS",
+            font=("Arial", 9, "bold"), text_color="#555555", anchor="w",
+        ).pack(anchor="w", pady=(0, 6))
+
+        if not windows:
+            ctk.CTkLabel(apps_wrap, text="No visible windows found.",
+                         font=("Arial", 10), text_color="#555555").pack()
+            return
+
+        apps_grid = ctk.CTkFrame(apps_wrap, fg_color="transparent")
+        apps_grid.pack(fill="x")
+
+        for i, win in enumerate(windows):
+            row = i // self._COLS
+            col = i % self._COLS
+            card = self._make_card(apps_grid, win)
+            card.grid(
+                row=row, column=col,
+                padx=(0 if col == 0 else self._GAP, 0),
+                pady=(0 if row == 0 else self._GAP, 0),
+                sticky="nw",
+            )
+            self._card_data.append((card, win))
+            self._launch_window_thumb(card, win)
+
+    # ── Async thumbnail loaders ───────────────────────────────────────────────
+
+    def _launch_screen_thumb(self, card, mon: dict):
+        def _work():
+            thumb = capture.get_screen_thumbnail(mon, self._THUMB_W, self._THUMB_H)
+            if thumb and self.winfo_exists():
+                img = ctk.CTkImage(light_image=thumb,
+                                   size=(self._THUMB_W, self._THUMB_H))
+                self.after(0, lambda: self._set_thumb(card, img))
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _launch_window_thumb(self, card, win: dict):
+        def _work():
+            thumb = capture.get_window_thumbnail(
+                win["hwnd"], win["width"], win["height"],
+                self._THUMB_W, self._THUMB_H)
+            icon  = capture.get_window_icon(win["hwnd"], 14)
+            updates = {}
+            if thumb:
+                updates["thumb"] = ctk.CTkImage(light_image=thumb,
+                                                 size=(self._THUMB_W, self._THUMB_H))
+            if icon:
+                updates["icon"]  = ctk.CTkImage(light_image=icon, size=(14, 14))
+            if updates and self.winfo_exists():
+                self.after(0, lambda u=updates: self._apply_updates(card, u))
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _set_thumb(self, card, ctk_img):
+        if card.winfo_exists() and hasattr(card, "_thumb_lbl"):
+            card._thumb_lbl.configure(image=ctk_img, text="")
+
+    def _apply_updates(self, card, updates: dict):
+        if not card.winfo_exists():
+            return
+        if "thumb" in updates and hasattr(card, "_thumb_lbl"):
+            card._thumb_lbl.configure(image=updates["thumb"], text="")
+        if "icon" in updates and hasattr(card, "_icon_lbl"):
+            card._icon_lbl.configure(image=updates["icon"])
+
+    # ── Card builder ──────────────────────────────────────────────────────────
+
+    def _make_card(self, parent, info: dict) -> ctk.CTkFrame:
+        selected = self._is_current(info)
+        card = ctk.CTkFrame(
+            parent,
+            width=self._CARD_W, height=self._CARD_H,
+            fg_color=CARD_COLOR, corner_radius=8,
+            border_width=2,
+            border_color=ORANGE_THEME if selected else "#2d3133",
+        )
+        card.pack_propagate(False)
+
+        # Thumbnail placeholder
+        thumb_lbl = ctk.CTkLabel(
+            card, text="", image=None,
+            width=self._THUMB_W, height=self._THUMB_H,
+            fg_color="#161819", corner_radius=6,
+        )
+        thumb_lbl.pack(padx=2, pady=(2, 0))
+        card._thumb_lbl = thumb_lbl
+
+        # Bottom row: icon + title
+        bot = ctk.CTkFrame(card, fg_color="transparent", height=24)
+        bot.pack(fill="x", padx=5, pady=(2, 2))
+        bot.pack_propagate(False)
+
+        icon_lbl = ctk.CTkLabel(bot, text="", width=14, height=14,
+                                 fg_color="transparent")
+        icon_lbl.pack(side="left")
+        card._icon_lbl = icon_lbl
+
+        title = info.get("name") if info.get("type") == "screen" else info.get("title", "")
+        display = (title[:20] + "…") if len(title) > 20 else title
+        ctk.CTkLabel(
+            bot, text=display,
+            font=("Arial", 9), text_color="#cccccc", anchor="w",
+        ).pack(side="left", padx=(3, 0))
+
+        self._bind_card(card, info)
+        return card
+
+    def _bind_card(self, card: ctk.CTkFrame, info: dict):
+        _leave_id = [None]
+
+        def on_click(*_):
+            self._on_select(info)
+            self.destroy()
+
+        def on_enter(*_):
+            if _leave_id[0]:
+                card.after_cancel(_leave_id[0])
+                _leave_id[0] = None
+            if not self._is_current(info):
+                card.configure(border_color="#4a5055")
+
+        def on_leave(*_):
+            def _do():
+                if not self._is_current(info):
+                    card.configure(border_color="#2d3133")
+            if _leave_id[0]:
+                card.after_cancel(_leave_id[0])
+            _leave_id[0] = card.after(40, _do)
+
+        def _bind_all(widget):
+            widget.bind("<Button-1>", on_click)
+            widget.bind("<Enter>",    on_enter)
+            widget.bind("<Leave>",    on_leave)
+            for child in widget.winfo_children():
+                _bind_all(child)
+
+        _bind_all(card)
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _is_current(self, info: dict) -> bool:
+        if not self._cur_target:
+            return False
+        if info.get("type") != self._cur_target.get("type"):
+            return False
+        if info.get("type") == "screen":
+            return info.get("index") == self._cur_target.get("index")
+        return info.get("hwnd") == self._cur_target.get("hwnd")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  MAIN APP
+# ══════════════════════════════════════════════════════════════════════════════
+
 class ArtLapseApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -27,15 +334,16 @@ class ArtLapseApp(ctk.CTk):
         self.after(20, self._setup_taskbar_presence)
         self.after(20, self.apply_round_region)
 
-        self.is_recording  = False
-        self.base_path     = config.load_config()
-        self.after_id      = None
-        self.count         = 1
-        self.final_path    = ""
-        self._offsetx      = 0
-        self._offsety      = 0
+        self.is_recording          = False
+        self.base_path             = config.load_config()
+        self.after_id              = None
+        self.count                 = 1
+        self.final_path            = ""
+        self._offsetx              = 0
+        self._offsety              = 0
         self._thumb_photo          = None
         self._custom_duration_secs = None
+        self._capture_target       = None   # dict from capture.get_visible_windows / get_monitors
 
         self._build_ui()
 
@@ -82,16 +390,28 @@ class ArtLapseApp(ctk.CTk):
         body = ctk.CTkFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=18, pady=(0, 14))
 
-        # Window picker
-        self._section_label(body, "CAPTURE WINDOW")
+        # Capture target picker
+        self._section_label(body, "CAPTURE TARGET")
         row1 = ctk.CTkFrame(body, fg_color="transparent")
         row1.pack(fill="x", pady=(2, 0))
-        self.window_dropdown = ctk.CTkComboBox(row1, values=capture.get_window_titles(), width=290)
-        self.window_dropdown.pack(side="left")
-        ctk.CTkButton(row1, text="⟳", width=44, height=34,
-                      fg_color=CARD_COLOR, hover_color="#333333",
-                      font=("Arial", 17, "bold"),
-                      command=self.refresh_windows).pack(side="left", padx=(6, 0))
+
+        self._target_btn = ctk.CTkButton(
+            row1,
+            text="  select a window or screen…",
+            width=290, height=34, anchor="w",
+            fg_color=CARD_COLOR, hover_color="#333333",
+            font=("Arial", 10), text_color="#666666",
+            corner_radius=6,
+            command=self._open_picker,
+        )
+        self._target_btn.pack(side="left")
+
+        ctk.CTkButton(
+            row1, text="⊞", width=44, height=34,
+            fg_color=CARD_COLOR, hover_color="#333333",
+            font=("Arial", 17, "bold"),
+            command=self._open_picker,
+        ).pack(side="left", padx=(6, 0))
 
         # Folder picker
         self._section_label(body, "OUTPUT FOLDER")
@@ -123,7 +443,7 @@ class ArtLapseApp(ctk.CTk):
             command=self.delete_project
         )
         self.delete_btn.pack(side="left", padx=(6, 0))
- 
+
         # Interval slider
         self._section_label(body, "INTERVAL")
         self.label_interval = ctk.CTkLabel(body, text="10 s",
@@ -138,7 +458,6 @@ class ArtLapseApp(ctk.CTk):
         )
         self.slider_interval.set(10)
         self.slider_interval.pack(fill="x", pady=(0, 6))
-
 
         # Status
         self.status_label = ctk.CTkLabel(body, text="Ready",
@@ -345,6 +664,21 @@ class ArtLapseApp(ctk.CTk):
         ctypes.windll.user32.ShowWindow(hwnd, 6)
 
     # ------------------------------------------------------------------ #
+    #  CAPTURE TARGET PICKER                                               #
+    # ------------------------------------------------------------------ #
+    def _open_picker(self):
+        WindowPickerPopup(self, self._capture_target, self._on_target_selected)
+
+    def _on_target_selected(self, target: dict):
+        self._capture_target = target
+        if target["type"] == "screen":
+            name = target["name"]
+        else:
+            name = target["title"]
+        display = (name[:32] + "…") if len(name) > 32 else name
+        self._target_btn.configure(text=f"  {display}", text_color="white")
+
+    # ------------------------------------------------------------------ #
     #  EXPORT PANEL CONTROLS                                               #
     # ------------------------------------------------------------------ #
     def _update_interval_label(self, val):
@@ -439,9 +773,6 @@ class ArtLapseApp(ctk.CTk):
     # ------------------------------------------------------------------ #
     #  FOLDER / PROJECT HELPERS                                            #
     # ------------------------------------------------------------------ #
-    def refresh_windows(self):
-        self.window_dropdown.configure(values=capture.get_window_titles())
-
     def choose_folder(self):
         path = filedialog.askdirectory()
         if path:
@@ -548,6 +879,10 @@ class ArtLapseApp(ctk.CTk):
     # ------------------------------------------------------------------ #
     def toggle_capture(self):
         if not self.is_recording:
+            if self._capture_target is None:
+                self.status_label.configure(text="Select a capture target first", text_color="red")
+                return
+
             path = self._resolve_project_path()
             if not path:
                 self.status_label.configure(text="Set a folder & project name first", text_color="red")
@@ -606,7 +941,7 @@ class ArtLapseApp(ctk.CTk):
             return
 
         save_path = os.path.join(self.final_path, f"shot_{self.count:04d}.png")
-        captured, warning = capture.capture_frame(self.window_dropdown.get(), save_path)
+        captured, warning = capture.capture_frame(self._capture_target, save_path)
 
         self.warn_label.configure(text=warning)
         if captured:
