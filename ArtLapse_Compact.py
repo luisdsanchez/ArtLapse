@@ -632,6 +632,7 @@ class ArtLapseApp(ctk.CTk):
         self._prev_thumb_bytes     = None   # last 32×32 grayscale thumbnail for diff
         self._frame_hashes         = set()  # hashes of captured frames for dedup
         self._tooltip_win          = None
+        self._active_tooltips      = set()   # all open tooltip toplevels
 
         self._build_ui()
 
@@ -984,15 +985,63 @@ class ArtLapseApp(ctk.CTk):
             text_color="#cccccc",
             justify="left",
         ).pack(padx=10, pady=6)
+        self._active_tooltips.add(self._tooltip_win)
+        self.after(50, self._poll_smart_tooltip)
+
+    def _poll_smart_tooltip(self):
+        if not self._tooltip_win:
+            return
+        try:
+            mx = self.winfo_pointerx()
+            my = self.winfo_pointery()
+            wx = self._smart_cb.winfo_rootx()
+            wy = self._smart_cb.winfo_rooty()
+            ww = self._smart_cb.winfo_width()
+            wh = self._smart_cb.winfo_height()
+            if mx < wx or mx > wx + ww or my < wy or my > wy + wh:
+                self._hide_smart_tooltip()
+                return
+        except Exception:
+            self._hide_smart_tooltip()
+            return
+        self.after(50, self._poll_smart_tooltip)
 
     def _hide_smart_tooltip(self, event=None):
         if self._tooltip_win:
+            self._active_tooltips.discard(self._tooltip_win)
             self._tooltip_win.destroy()
             self._tooltip_win = None
+
+    def _close_all_tooltips(self):
+        for tip in list(self._active_tooltips):
+            try:
+                tip.destroy()
+            except Exception:
+                pass
+        self._active_tooltips.clear()
+        self._tooltip_win = None
 
     def _bind_tooltip(self, widget, text: str):
         """Attach a small hover tooltip to any widget."""
         tip = [None]
+
+        def _poll():
+            if not tip[0]:
+                return
+            try:
+                mx = self.winfo_pointerx()
+                my = self.winfo_pointery()
+                wx = widget.winfo_rootx()
+                wy = widget.winfo_rooty()
+                ww = widget.winfo_width()
+                wh = widget.winfo_height()
+                if mx < wx or mx > wx + ww or my < wy or my > wy + wh:
+                    _hide()
+                    return
+            except Exception:
+                _hide()
+                return
+            self.after(50, _poll)
 
         def _show(*_):
             if tip[0]:
@@ -1006,14 +1055,16 @@ class ArtLapseApp(ctk.CTk):
             tip[0].geometry(f"+{x}+{y}")
             ctk.CTkLabel(tip[0], text=text, font=("Arial", 10),
                          text_color="#cccccc").pack(padx=8, pady=4)
+            self._active_tooltips.add(tip[0])
+            self.after(50, _poll)
 
         def _hide(*_):
             if tip[0]:
+                self._active_tooltips.discard(tip[0])
                 tip[0].destroy()
                 tip[0] = None
 
         widget.bind("<Enter>", _show, add="+")
-        widget.bind("<Leave>", _hide, add="+")
 
     def _update_status_guidance(self):
         """Update the status label and step colours to guide the user."""
@@ -1106,6 +1157,7 @@ class ArtLapseApp(ctk.CTk):
         self.after(0, self.destroy)
 
     def _hide_to_tray(self):
+        self._close_all_tooltips()
         self.withdraw()
 
     def _quit_app(self):

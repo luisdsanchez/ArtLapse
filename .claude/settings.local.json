@@ -4,7 +4,19 @@
       "Bash(pip show:*)",
       "Bash(python -c \"import sys; print\\(sys.executable\\)\")",
       "Bash(pip install:*)",
-      "Bash(pyinstaller --onefile --windowed --name \"ArtLapse1.0\" ArtLapse_Compact.py)"
+      "Bash(pyinstaller --onefile --windowed --name \"ArtLapse1.0\" ArtLapse_Compact.py)",
+      "Bash(python ArtLapse_Compact.py)",
+      "Bash(python -c ':*)",
+      "Bash(pyinstaller --onefile --windowed --name \"ArtLapse1.0\" --icon=artlapse.ico ArtLapse_Compact.py)",
+      "Bash(pyinstaller --onefile --windowed --name \"ArtLapse1.0\" --icon=artlapse.ico --add-data \"artlapse.ico;.\" ArtLapse_Compact.py)",
+      "Bash(del artlapse_preview.png)",
+      "Bash(ie4uinit.exe -show)",
+      "Bash(taskkill /IM explorer.exe /F)",
+      "Bash(del /F /Q \"%localappdata%\\\\IconCache.db\")",
+      "Bash(del /F /Q \"%localappdata%\\\\Microsoft\\\\Windows\\\\Explorer\\\\iconcache*\")",
+      "Bash(start explorer.exe)",
+      "Bash(cmd /c \"taskkill /IM explorer.exe /F & del /F /Q \\\\\"%localappdata%\\\\IconCache.db\\\\\" & del /F /Q \\\\\"%localappdata%\\\\Microsoft\\\\Windows\\\\Explorer\\\\iconcache*\\\\\" & start explorer.exe\")",
+      "Bash(pyinstaller ArtLapse1.01.spec)"
     ]
   }
 }
