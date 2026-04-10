@@ -5,7 +5,8 @@ import re
 import shutil
 import threading
 from tkinter import filedialog
-from PIL import Image
+from PIL import Image, ImageDraw
+import pystray
 
 import config
 import capture
@@ -13,6 +14,16 @@ import export
 from constants import (
     ORANGE_THEME, ORANGE_DIM, BG_COLOR, CARD_COLOR, APP_W, APP_H
 )
+
+
+def _make_app_icon(size=64) -> Image.Image:
+    """Create an orange rounded-rectangle icon."""
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d   = ImageDraw.Draw(img)
+    r   = size // 6
+    # orange fill (#e85c25)
+    d.rounded_rectangle([0, 0, size - 1, size - 1], radius=r, fill=(232, 92, 37, 255))
+    return img
 
 ctk.set_appearance_mode("dark")
 
@@ -22,9 +33,9 @@ ctk.set_appearance_mode("dark")
 # ══════════════════════════════════════════════════════════════════════════════
 
 class WindowPickerPopup(ctk.CTkToplevel):
-    _POPUP_W = 500
+    _POPUP_W = 520
     _POPUP_H = 460
-    _CARD_W  = 152    # (500 - 14*2 - 8*2) // 3
+    _CARD_W  = 152    # (520 - scrollbar~16 - 14*2 - 8*2) // 3
     _THUMB_W = 148    # CARD_W - 4
     _THUMB_H = 84     # ≈ 16:9
     _CARD_H  = 116    # THUMB_H + bottom + padding
@@ -320,6 +331,250 @@ class WindowPickerPopup(ctk.CTkToplevel):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  PROJECT PICKER POPUP
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ProjectPickerPopup(ctk.CTkToplevel):
+    _POPUP_W = 520
+    _POPUP_H = 420
+    _PAD     = 14
+
+    def __init__(self, parent, current_project: str, base_path: str, on_select, on_delete):
+        super().__init__(parent)
+        self.overrideredirect(True)
+        self.configure(fg_color=BG_COLOR)
+        self.wm_attributes("-topmost", True)
+
+        self._on_select = on_select
+        self._on_delete = on_delete
+        self._current   = current_project
+        self._base_path = base_path
+        self._drag_ox   = 0
+        self._drag_oy   = 0
+
+        px = parent.winfo_x() + (APP_W       - self._POPUP_W) // 2
+        py = parent.winfo_y() + max(0, (APP_H - self._POPUP_H) // 2)
+        self.geometry(f"{self._POPUP_W}x{self._POPUP_H}+{px}+{py}")
+
+        self._build_ui()
+        self.after(20, self._apply_round)
+        self.grab_set()
+        self.after(60, self._name_entry.focus)
+
+    def _apply_round(self):
+        hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+        rgn  = ctypes.windll.gdi32.CreateRoundRectRgn(
+            0, 0, self._POPUP_W, self._POPUP_H, 14, 14)
+        ctypes.windll.user32.SetWindowRgn(hwnd, rgn, True)
+
+    def _build_ui(self):
+        # Title bar
+        tbar = ctk.CTkFrame(self, fg_color=CARD_COLOR, height=42, corner_radius=0)
+        tbar.pack(fill="x")
+        tbar.pack_propagate(False)
+        tbar.bind("<Button-1>",  self._drag_start)
+        tbar.bind("<B1-Motion>", self._drag_move)
+
+        ctk.CTkLabel(
+            tbar, text="SELECT PROJECT",
+            font=("Arial", 10, "bold"), text_color="#666666",
+        ).place(relx=0.5, rely=0.5, anchor="center")
+
+        ctk.CTkButton(
+            tbar, text="✕", width=30, height=30,
+            fg_color="transparent", hover_color="#c42b1c",
+            font=("Arial", 13, "bold"),
+            command=self.destroy,
+        ).place(relx=1.0, rely=0.5, anchor="e", x=-6)
+
+        # New project input
+        new_section = ctk.CTkFrame(self, fg_color="transparent")
+        new_section.pack(fill="x", padx=self._PAD, pady=(10, 0))
+
+        ctk.CTkLabel(
+            new_section, text="NEW PROJECT",
+            font=("Arial", 9, "bold"), text_color="#555555", anchor="w",
+        ).pack(anchor="w", pady=(0, 4))
+
+        entry_row = ctk.CTkFrame(new_section, fg_color="transparent")
+        entry_row.pack(fill="x")
+
+        self._name_entry = ctk.CTkEntry(
+            entry_row, height=34,
+            placeholder_text="type a new project name…",
+            font=("Arial", 11), fg_color=CARD_COLOR,
+        )
+        self._name_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        self._name_entry.bind("<Return>", lambda e: self._confirm_new())
+
+        ctk.CTkButton(
+            entry_row, text="✓", width=34, height=34,
+            fg_color=ORANGE_THEME, hover_color=ORANGE_DIM,
+            font=("Arial", 13, "bold"),
+            command=self._confirm_new,
+        ).pack(side="left")
+
+        # Existing projects section
+        ctk.CTkLabel(
+            self, text="EXISTING PROJECTS",
+            font=("Arial", 9, "bold"), text_color="#555555", anchor="w",
+        ).pack(anchor="w", padx=self._PAD, pady=(10, 0))
+
+        self._scroll = ctk.CTkScrollableFrame(
+            self, fg_color="transparent",
+            scrollbar_button_color="#333333",
+            scrollbar_button_hover_color="#555555",
+        )
+        self._scroll.pack(fill="both", expand=True, padx=self._PAD, pady=(4, self._PAD))
+
+        self._populate()
+
+    def _drag_start(self, event):
+        self._drag_ox = event.x_root - self.winfo_x()
+        self._drag_oy = event.y_root - self.winfo_y()
+
+    def _drag_move(self, event):
+        self.geometry(f"+{event.x_root - self._drag_ox}+{event.y_root - self._drag_oy}")
+
+    def _populate(self):
+        for w in list(self._scroll.winfo_children()):
+            w.destroy()
+
+        projects = config.get_existing_projects(self._base_path)
+        if not projects:
+            ctk.CTkLabel(
+                self._scroll, text="No existing projects.",
+                font=("Arial", 10), text_color="#555555",
+            ).pack(pady=16)
+            return
+
+        for name in projects:
+            self._make_row(name)
+
+    def _make_row(self, name: str):
+        selected = (name == self._current)
+
+        frame_count = 0
+        if self._base_path:
+            proj_path = os.path.join(self._base_path, name)
+            if os.path.isdir(proj_path):
+                try:
+                    frame_count = len([f for f in os.listdir(proj_path) if f.endswith(".png")])
+                except Exception:
+                    pass
+
+        row = ctk.CTkFrame(
+            self._scroll,
+            fg_color=CARD_COLOR, corner_radius=8,
+            border_width=2,
+            border_color=ORANGE_THEME if selected else "#2d3133",
+            height=50,
+        )
+        row.pack(fill="x", pady=(0, 6))
+        row.pack_propagate(False)
+
+        # Folder icon area
+        icon_area = ctk.CTkFrame(row, fg_color="#1a1d1f", corner_radius=6, width=36, height=36)
+        icon_area.pack(side="left", padx=(7, 0), pady=7)
+        icon_area.pack_propagate(False)
+        ctk.CTkLabel(
+            icon_area, text="📁", font=("Arial", 14), fg_color="transparent",
+        ).place(relx=0.5, rely=0.5, anchor="center")
+
+        # Name + frame count
+        info_col = ctk.CTkFrame(row, fg_color="transparent")
+        info_col.pack(side="left", fill="both", expand=True, padx=(8, 4), pady=6)
+
+        ctk.CTkLabel(
+            info_col, text=name,
+            font=("Arial", 10, "bold"), text_color="#dddddd", anchor="w",
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            info_col,
+            text=f"{frame_count} frame{'s' if frame_count != 1 else ''}",
+            font=("Arial", 9), text_color="#555555", anchor="w",
+        ).pack(anchor="w")
+
+        # Delete button — excluded from click-to-select binding
+        del_btn = ctk.CTkButton(
+            row, text="🗑", width=30, height=30,
+            fg_color="transparent", hover_color="#5a2020",
+            font=("Arial", 13), text_color="#ff5555",
+            command=lambda n=name: self._request_delete(n),
+        )
+        del_btn.pack(side="right", padx=(0, 7))
+
+        # Open folder button — excluded from click-to-select binding
+        def _open_folder(path=proj_path):
+            if os.path.isdir(path):
+                import subprocess
+                subprocess.Popen(["explorer", os.path.normpath(path)])
+
+        open_btn = ctk.CTkButton(
+            row, text="▲", width=30, height=30,
+            fg_color="transparent", hover_color=ORANGE_DIM,
+            font=("Arial", 14, "bold"), text_color=ORANGE_THEME,
+            command=_open_folder,
+        )
+        open_btn.pack(side="right", padx=(0, 2))
+
+        self._bind_row(row, name, del_btn, open_btn)
+
+    def _bind_row(self, row, name, del_btn, open_btn=None):
+        _leave_id = [None]
+
+        def on_click(*_):
+            self._on_select(name)
+            self.destroy()
+
+        def on_enter(*_):
+            if _leave_id[0]:
+                row.after_cancel(_leave_id[0])
+                _leave_id[0] = None
+            if name != self._current:
+                row.configure(border_color="#4a5055")
+
+        def on_leave(*_):
+            def _do():
+                if name != self._current:
+                    row.configure(border_color="#2d3133")
+            if _leave_id[0]:
+                row.after_cancel(_leave_id[0])
+            _leave_id[0] = row.after(40, _do)
+
+        skip = {del_btn, open_btn}
+
+        def _bind_all(widget):
+            if widget in skip:
+                return
+            widget.bind("<Button-1>", on_click)
+            widget.bind("<Enter>",    on_enter)
+            widget.bind("<Leave>",    on_leave)
+            for child in widget.winfo_children():
+                _bind_all(child)
+
+        _bind_all(row)
+
+    def _confirm_new(self):
+        name = self._name_entry.get().strip()
+        if not name:
+            self._name_entry.configure(border_color="red")
+            self.after(800, lambda: self._name_entry.configure(border_color="gray"))
+            return
+        self._on_select(name)
+        self.destroy()
+
+    def _request_delete(self, name: str):
+        self.grab_release()
+        self._on_delete(name, refresh_cb=self._safe_repopulate)
+
+    def _safe_repopulate(self):
+        if self.winfo_exists():
+            self._populate()
+            self.grab_set()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  MAIN APP
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -334,6 +589,16 @@ class ArtLapseApp(ctk.CTk):
         self.after(20, self._setup_taskbar_presence)
         self.after(20, self.apply_round_region)
 
+        # Set window / taskbar icon
+        self._icon_img = _make_app_icon(64)
+        from PIL import ImageTk
+        self._icon_photo = ImageTk.PhotoImage(self._icon_img)
+        self.iconphoto(True, self._icon_photo)
+
+        # System tray
+        self._tray_icon = None
+        self._setup_tray()
+
         self.is_recording          = False
         self.base_path             = config.load_config()
         self.after_id              = None
@@ -344,6 +609,7 @@ class ArtLapseApp(ctk.CTk):
         self._thumb_photo          = None
         self._custom_duration_secs = None
         self._capture_target       = None   # dict from capture.get_visible_windows / get_monitors
+        self._current_project      = ""
 
         self._build_ui()
 
@@ -377,10 +643,14 @@ class ArtLapseApp(ctk.CTk):
                       fg_color="transparent", hover_color="#333333",
                       font=("Arial", 15, "bold"),
                       corner_radius=8, command=self._minimize).pack(side="left", padx=2)
+        ctk.CTkButton(btn_frame, text="⬛", width=34, height=34,
+                      fg_color="transparent", hover_color="#333333",
+                      font=("Arial", 11), text_color=ORANGE_THEME,
+                      corner_radius=8, command=self._hide_to_tray).pack(side="left", padx=2)
         ctk.CTkButton(btn_frame, text="✕", width=34, height=34,
                       fg_color="transparent", hover_color="#c42b1c",
                       font=("Arial", 15, "bold"),
-                      corner_radius=8, command=self.destroy).pack(side="left", padx=2)
+                      corner_radius=8, command=self._quit_app).pack(side="left", padx=2)
 
         for widget in (hdr,):
             widget.bind("<Button-1>",  self._click_window)
@@ -398,18 +668,18 @@ class ArtLapseApp(ctk.CTk):
         self._target_btn = ctk.CTkButton(
             row1,
             text="  select a window or screen…",
-            width=290, height=34, anchor="w",
+            height=34, anchor="w",
             fg_color=CARD_COLOR, hover_color="#333333",
             font=("Arial", 10), text_color="#666666",
             corner_radius=6,
             command=self._open_picker,
         )
-        self._target_btn.pack(side="left")
+        self._target_btn.pack(side="left", fill="x", expand=True)
 
         ctk.CTkButton(
-            row1, text="⊞", width=44, height=34,
+            row1, text="⛶", width=44, height=34,
             fg_color=CARD_COLOR, hover_color="#333333",
-            font=("Arial", 17, "bold"),
+            font=("Arial", 19),
             command=self._open_picker,
         ).pack(side="left", padx=(6, 0))
 
@@ -419,30 +689,32 @@ class ArtLapseApp(ctk.CTk):
         row2.pack(fill="x", pady=(2, 0))
         self.folder_label = ctk.CTkLabel(row2, text=config.get_short_path(self.base_path),
                                          font=("Arial", 10), text_color="gray",
-                                         anchor="w", width=254)
-        self.folder_label.pack(side="left")
+                                         anchor="w")
+        self.folder_label.pack(side="left", fill="x", expand=True)
         ctk.CTkButton(row2, text="📁", width=44, height=34,
                       fg_color=CARD_COLOR, hover_color="#333333",
                       font=("Arial", 16),
                       command=self.choose_folder).pack(side="left", padx=(6, 0))
-        ctk.CTkButton(row2, text="↗", width=38, height=34,
-                      fg_color=CARD_COLOR, hover_color="#333333",
-                      font=("Arial", 17, "bold"),
+        ctk.CTkButton(row2, text="▲", width=38, height=34,
+                      fg_color=CARD_COLOR, hover_color=ORANGE_DIM,
+                      font=("Arial", 17, "bold"), text_color=ORANGE_THEME,
                       command=self.open_output_folder).pack(side="left", padx=(4, 0))
 
         # Project name
         self._section_label(body, "PROJECT NAME  ·  type new or pick existing")
         proj_row = ctk.CTkFrame(body, fg_color="transparent")
         proj_row.pack(fill="x", pady=(2, 0))
-        self.project_combo = ctk.CTkComboBox(proj_row, values=config.get_existing_projects(self.base_path), width=310)
-        self.project_combo.pack(side="left")
-        self.delete_btn = ctk.CTkButton(
-            proj_row, text="🗑", width=44, height=34,
-            fg_color="#3a1a1a", hover_color="#5a2020",
-            font=("Arial", 16), text_color="#ff5555",
-            command=self.delete_project
+
+        self._project_btn = ctk.CTkButton(
+            proj_row,
+            text="  type new or pick existing…",
+            height=34, anchor="w",
+            fg_color=CARD_COLOR, hover_color="#333333",
+            font=("Arial", 10), text_color="#666666",
+            corner_radius=6,
+            command=self._open_project_picker,
         )
-        self.delete_btn.pack(side="left", padx=(6, 0))
+        self._project_btn.pack(side="left", fill="x", expand=True)
 
         # Interval slider
         self._section_label(body, "INTERVAL")
@@ -495,18 +767,17 @@ class ArtLapseApp(ctk.CTk):
         )
         self.ffmpeg_btn.pack(side="left", fill="x", expand=True, padx=(0, 6))
 
-        self._export_collapsed = False
+        self._export_collapsed = True
         self.collapse_btn = ctk.CTkButton(
-            export_header, text="▲", width=38, height=38,
+            export_header, text="▼", width=38, height=38,
             fg_color=CARD_COLOR, hover_color="#333333",
             font=("Arial", 12, "bold"), text_color="gray",
             command=self._toggle_export_panel
         )
         self.collapse_btn.pack(side="left")
 
-        # Collapsible export options card
+        # Collapsible export options card (hidden on start)
         self.export_card = ctk.CTkFrame(body, fg_color=CARD_COLOR, corner_radius=10)
-        self.export_card.pack(fill="x", pady=(4, 0))
 
         # ── Two-column layout: thumbnail left, settings right ────────────
         self._dur_snaps  = [15, 30, 45, 60, 90, 120, 180, 240, 300, 420, 600, None]
@@ -629,6 +900,15 @@ class ArtLapseApp(ctk.CTk):
         ctk.CTkLabel(q_hints, text="Highest", font=("Arial", 9),
                      text_color="#444444").pack(side="right")
 
+        # Shrink window to collapsed height on first draw
+        self.after(30, self._init_collapsed_height)
+
+    def _init_collapsed_height(self):
+        self.update_idletasks()
+        new_h = self.winfo_reqheight()
+        self.geometry(f"{APP_W}x{new_h}")
+        self.after(10, lambda: self.apply_round_region(APP_W, new_h))
+
     # ------------------------------------------------------------------ #
     #  UI HELPERS                                                          #
     # ------------------------------------------------------------------ #
@@ -663,11 +943,58 @@ class ArtLapseApp(ctk.CTk):
         hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
         ctypes.windll.user32.ShowWindow(hwnd, 6)
 
+    def _setup_tray(self):
+        menu = pystray.Menu(
+            pystray.MenuItem("Show ArtLapse", self._tray_show, default=True),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Quit", self._tray_quit),
+        )
+        icon_img = _make_app_icon(64)
+        self._tray_icon = pystray.Icon("ArtLapse", icon_img, "ArtLapse", menu)
+        threading.Thread(target=self._tray_icon.run, daemon=True).start()
+
+    def _tray_show(self, icon=None, item=None):
+        self.after(0, self._restore_window)
+
+    def _restore_window(self):
+        self.deiconify()
+        hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+        ctypes.windll.user32.ShowWindow(hwnd, 9)   # SW_RESTORE
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+
+    def _tray_quit(self, icon=None, item=None):
+        if self._tray_icon:
+            self._tray_icon.stop()
+        self.after(0, self.destroy)
+
+    def _hide_to_tray(self):
+        self.withdraw()
+
+    def _quit_app(self):
+        if self._tray_icon:
+            self._tray_icon.stop()
+        self.destroy()
+
     # ------------------------------------------------------------------ #
     #  CAPTURE TARGET PICKER                                               #
     # ------------------------------------------------------------------ #
     def _open_picker(self):
         WindowPickerPopup(self, self._capture_target, self._on_target_selected)
+
+    # ------------------------------------------------------------------ #
+    #  PROJECT PICKER                                                      #
+    # ------------------------------------------------------------------ #
+    def _open_project_picker(self):
+        ProjectPickerPopup(
+            self, self._current_project, self.base_path,
+            on_select=self._on_project_selected,
+            on_delete=self.delete_project,
+        )
+
+    def _on_project_selected(self, name: str):
+        self._current_project = name
+        display = (name[:32] + "…") if len(name) > 32 else name
+        self._project_btn.configure(text=f"  {display}", text_color="white")
 
     def _on_target_selected(self, target: dict):
         self._capture_target = target
@@ -779,7 +1106,7 @@ class ArtLapseApp(ctk.CTk):
             self.base_path = path
             config.save_config(self.base_path)
             self.folder_label.configure(text=config.get_short_path(self.base_path))
-            self.project_combo.configure(values=config.get_existing_projects(self.base_path))
+            # project picker refreshes dynamically from base_path
 
     def open_output_folder(self):
         target = self.final_path if self.final_path and os.path.exists(self.final_path) else self.base_path
@@ -788,19 +1115,27 @@ class ArtLapseApp(ctk.CTk):
         else:
             self.status_label.configure(text="No folder to open", text_color="orange")
 
-    def delete_project(self):
-        name = self.project_combo.get().strip()
-        if not name or name == "New Project" or not self.base_path:
+    def delete_project(self, name: str = None, refresh_cb=None):
+        if name is None:
+            name = self._current_project
+        name = name.strip()
+        if not name or not self.base_path:
             self.status_label.configure(text="No project selected to delete", text_color="orange")
+            if refresh_cb:
+                refresh_cb()
             return
 
         target = os.path.join(self.base_path, name)
         if not os.path.exists(target):
             self.status_label.configure(text="Folder not found", text_color="orange")
+            if refresh_cb:
+                refresh_cb()
             return
 
         if target == self.final_path and self.is_recording:
             self.status_label.configure(text="Can't delete — currently recording", text_color="red")
+            if refresh_cb:
+                refresh_cb()
             return
 
         dialog = ctk.CTkToplevel(self)
@@ -830,15 +1165,24 @@ class ArtLapseApp(ctk.CTk):
                 shutil.rmtree(target)
                 if target == self.final_path:
                     self.stop_and_reset()
-                else:
-                    self.project_combo.set("")
-                    self.project_combo.configure(values=config.get_existing_projects(self.base_path))
+                elif name == self._current_project:
+                    self._current_project = ""
+                    self._project_btn.configure(
+                        text="  type new or pick existing…", text_color="#666666"
+                    )
                 self.status_label.configure(text=f'"{name}" deleted', text_color="gray")
             except Exception as e:
                 self.status_label.configure(text=f"Delete failed: {e}", text_color="red")
+            if refresh_cb:
+                refresh_cb()
+
+        def cancel():
+            dialog.destroy()
+            if refresh_cb:
+                refresh_cb()
 
         ctk.CTkButton(btn_row, text="Cancel", fg_color=CARD_COLOR, hover_color="#333333",
-                      command=dialog.destroy, width=110).pack(side="left")
+                      command=cancel, width=110).pack(side="left")
         ctk.CTkButton(btn_row, text="🗑  Delete", fg_color="#5a2020", hover_color="#7a2a2a",
                       text_color="#ff5555", font=("Arial", 12, "bold"),
                       command=confirm, width=130).pack(side="right")
@@ -847,8 +1191,8 @@ class ArtLapseApp(ctk.CTk):
     #  SIZE ESTIMATE + THUMBNAIL                                           #
     # ------------------------------------------------------------------ #
     def _resolve_project_path(self):
-        name = self.project_combo.get().strip()
-        if not self.base_path or not name or name == "New Project":
+        name = self._current_project.strip()
+        if not self.base_path or not name:
             return None
         return os.path.join(self.base_path, name)
 
@@ -933,8 +1277,8 @@ class ArtLapseApp(ctk.CTk):
         self.size_label.configure(text="—")
         self.thumb_label.configure(image="", text="no preview")
         self._thumb_photo = None
-        self.project_combo.configure(values=config.get_existing_projects(self.base_path))
-        self.project_combo.set("")
+        self._current_project = ""
+        self._project_btn.configure(text="  type new or pick existing…", text_color="#666666")
 
     def capture_loop(self):
         if not self.is_recording:
