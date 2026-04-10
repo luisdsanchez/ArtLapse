@@ -610,6 +610,10 @@ class ArtLapseApp(ctk.CTk):
         self._custom_duration_secs = None
         self._capture_target       = None   # dict from capture.get_visible_windows / get_monitors
         self._current_project      = ""
+        self._identical_streak     = 0      # consecutive identical frames (smart capture)
+        self._prev_thumb_bytes     = None   # last 32×32 grayscale thumbnail for diff
+        self._frame_hashes         = set()  # hashes of captured frames for dedup
+        self._tooltip_win          = None
 
         self._build_ui()
 
@@ -729,7 +733,25 @@ class ArtLapseApp(ctk.CTk):
             command=self._update_interval_label
         )
         self.slider_interval.set(10)
-        self.slider_interval.pack(fill="x", pady=(0, 6))
+        self.slider_interval.pack(fill="x", pady=(0, 4))
+
+        # Smart Capture toggle
+        smart_row = ctk.CTkFrame(body, fg_color="transparent")
+        smart_row.pack(fill="x", pady=(0, 4))
+        self.smart_capture_var = ctk.BooleanVar(value=True)
+        self._smart_cb = ctk.CTkCheckBox(
+            smart_row, text="Smart Capture",
+            variable=self.smart_capture_var,
+            font=("Arial", 12),
+            text_color="#aaaaaa",
+            checkbox_width=16, checkbox_height=16,
+            checkmark_color="white",
+            fg_color=ORANGE_THEME, hover_color=ORANGE_DIM,
+            border_color="#555555",
+        )
+        self._smart_cb.pack(side="left")
+        self._smart_cb.bind("<Enter>", self._show_smart_tooltip)
+        self._smart_cb.bind("<Leave>", self._hide_smart_tooltip)
 
         # Status
         self.status_label = ctk.CTkLabel(body, text="Ready",
@@ -916,6 +938,29 @@ class ArtLapseApp(ctk.CTk):
         ctk.CTkLabel(parent, text=text,
                      font=("Arial", 11, "bold"),
                      text_color="#555555", anchor="w").pack(anchor="w", pady=(6, 0))
+
+    def _show_smart_tooltip(self, event=None):
+        if self._tooltip_win:
+            return
+        x = self._smart_cb.winfo_rootx()
+        y = self._smart_cb.winfo_rooty() - 52
+        self._tooltip_win = ctk.CTkToplevel(self)
+        self._tooltip_win.overrideredirect(True)
+        self._tooltip_win.wm_attributes("-topmost", True)
+        self._tooltip_win.configure(fg_color="#2a2d2f")
+        self._tooltip_win.geometry(f"+{x}+{y}")
+        ctk.CTkLabel(
+            self._tooltip_win,
+            text="Skips saving a frame if the screen\nhasn't changed for 5 consecutive shots.",
+            font=("Arial", 11),
+            text_color="#cccccc",
+            justify="left",
+        ).pack(padx=10, pady=6)
+
+    def _hide_smart_tooltip(self, event=None):
+        if self._tooltip_win:
+            self._tooltip_win.destroy()
+            self._tooltip_win = None
 
     def _click_window(self, event):
         self._offsetx = event.x_root - self.winfo_x()
@@ -1157,11 +1202,13 @@ class ArtLapseApp(ctk.CTk):
         dialog.overrideredirect(True)
         dialog.configure(fg_color="#2a1a1a")
         dialog.resizable(False, False)
+        dialog.wm_attributes("-topmost", True)
 
         dw, dh = 300, 160
         cx = self.winfo_x() + (APP_W - dw) // 2
         cy = self.winfo_y() + (APP_H - dh) // 2
         dialog.geometry(f"{dw}x{dh}+{cx}+{cy}")
+        dialog.lift()
         dialog.grab_set()
 
         ctk.CTkLabel(dialog, text="Delete project?",
@@ -1255,6 +1302,7 @@ class ArtLapseApp(ctk.CTk):
                 self.frames_label.configure(text=f"Frames: {len(existing)}")
 
             self.is_recording = True
+            self._identical_streak = 0; self._prev_thumb_bytes = None
             self.start_btn.configure(text="⏸  PAUSE", fg_color="#333333", hover_color="#444444")
             self.stop_btn.pack_forget()
             self.status_label.configure(text=f"Recording — frame {self.count}", text_color=ORANGE_THEME)
@@ -1262,6 +1310,7 @@ class ArtLapseApp(ctk.CTk):
             self.capture_loop()
         else:
             self.is_recording = False
+            self._identical_streak = 0; self._prev_thumb_bytes = None
             if self.after_id:
                 self.after_cancel(self.after_id)
                 self.after_id = None
@@ -1281,6 +1330,7 @@ class ArtLapseApp(ctk.CTk):
 
         self.final_path = ""
         self.count      = 1
+        self._frame_hashes.clear()
         self.start_btn.configure(text="START", fg_color=ORANGE_THEME, hover_color=ORANGE_DIM)
         self.stop_btn.pack_forget()
         self.status_label.configure(
@@ -1299,18 +1349,53 @@ class ArtLapseApp(ctk.CTk):
         if not self.is_recording:
             return
 
-        save_path = os.path.join(self.final_path, f"shot_{self.count:04d}.png")
-        captured, warning = capture.capture_frame(self._capture_target, save_path)
+        interval_ms = int(float(self.slider_interval.get()) * 1000)
+        save_path   = os.path.join(self.final_path, f"shot_{self.count:04d}.png")
+
+        if self.smart_capture_var.get():
+            img, warning = capture.capture_frame_raw(self._capture_target)
+            captured = False
+            if img is not None:
+                import struct
+                thumb_bytes = img.resize((32, 32)).convert("L").tobytes()
+                prev = getattr(self, "_prev_thumb_bytes", None)
+                self._prev_thumb_bytes = thumb_bytes
+
+                if prev is not None:
+                    # mean absolute difference across the 32×32 grayscale thumbnail
+                    diff = sum(abs(a - b) for a, b in zip(thumb_bytes, prev)) / 1024
+                    same = diff < 4.0  # threshold: avg pixel change < 4/255
+                else:
+                    same = False
+
+                if same:
+                    self._identical_streak = getattr(self, "_identical_streak", 0) + 1
+                else:
+                    self._identical_streak = 0
+
+                if self._identical_streak >= 4:   # 5th identical frame → pause
+                    self.warn_label.configure(text="")
+                    self.status_label.configure(
+                        text=f"Smart pause — frame {self.count - 1}", text_color="#555555"
+                    )
+                    self.after_id = self.after(interval_ms, self.capture_loop)
+                    return
+
+                img.convert("RGB").save(save_path)
+                captured = True
+        else:
+            captured, warning = capture.capture_frame(self._capture_target, save_path)
 
         self.warn_label.configure(text=warning)
         if captured:
-            self.status_label.configure(text=f"Recording — frame {self.count}")
+            self.status_label.configure(
+                text=f"Recording — frame {self.count}", text_color=ORANGE_THEME
+            )
             self.frames_label.configure(text=f"Frames: {self.count}")
             self.count += 1
             self._update_thumbnail(save_path)
             self._refresh_size_estimate()
 
-        interval_ms = int(float(self.slider_interval.get()) * 1000)
         self.after_id = self.after(interval_ms, self.capture_loop)
 
     # ------------------------------------------------------------------ #

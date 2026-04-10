@@ -216,6 +216,46 @@ def get_window_titles() -> list:
     return [w["title"] for w in wins] or ["No Windows Found"]
 
 
+def capture_frame_raw(target) -> "tuple[Image.Image | None, str]":
+    """
+    Like capture_frame but returns the PIL image instead of saving it.
+    Returns (image, warning_string).
+    """
+    if isinstance(target, str):
+        target = _resolve_window_by_title(target)
+        if target is None:
+            return None, "⚠ Window not found — retrying…"
+
+    if target.get("type") == "screen":
+        img = _bitblt_capture(target["left"], target["top"],
+                              target["width"], target["height"])
+        if img is None:
+            return None, "⚠ Screen capture failed"
+        return img, ""
+
+    hwnd = target.get("hwnd")
+    if not hwnd:
+        return None, "⚠ No window selected"
+
+    user32 = ctypes.windll.user32
+    if not user32.IsWindowVisible(hwnd):
+        return None, "⚠ Window not found — retrying…"
+    if user32.IsIconic(hwnd):
+        return None, "⚠ Window is minimized — skipping frame"
+
+    rect = ctypes.wintypes.RECT()
+    user32.GetWindowRect(hwnd, ctypes.byref(rect))
+    width  = rect.right  - rect.left
+    height = rect.bottom - rect.top
+    if width <= 0 or height <= 0:
+        return None, "⚠ Window has no size"
+
+    img = _printwindow_capture(hwnd, width, height)
+    if img is None:
+        return None, "⚠ Capture failed"
+    return img, ""
+
+
 def capture_frame(target, save_path: str) -> tuple[bool, str]:
     """
     Capture a frame to save_path.
