@@ -17,12 +17,33 @@ from constants import (
 
 
 def _make_app_icon(size=64) -> Image.Image:
-    """Create an orange rounded-rectangle icon."""
+    """Create an orange rounded-rectangle icon with a white 'A' centered."""
+    from PIL import ImageFont
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d   = ImageDraw.Draw(img)
     r   = size // 6
-    # orange fill (#e85c25)
     d.rounded_rectangle([0, 0, size - 1, size - 1], radius=r, fill=(232, 92, 37, 255))
+
+    # Draw white "A" centered
+    font_size = int(size * 0.55)
+    font = None
+    for font_path in [
+        "C:/Windows/Fonts/arialbd.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/calibrib.ttf",
+    ]:
+        try:
+            font = ImageFont.truetype(font_path, font_size)
+            break
+        except OSError:
+            continue
+    if font is None:
+        font = ImageFont.load_default()
+
+    bbox = d.textbbox((0, 0), "A", font=font)
+    tx = (size - (bbox[2] - bbox[0])) // 2 - bbox[0]
+    ty = (size - (bbox[3] - bbox[1])) // 2 - bbox[1]
+    d.text((tx, ty), "A", fill=(255, 255, 255, 255), font=font)
     return img
 
 ctk.set_appearance_mode("dark")
@@ -586,14 +607,11 @@ class ArtLapseApp(ctk.CTk):
         self.geometry(f"{APP_W}x{APP_H}")
         self.configure(fg_color=BG_COLOR)
         self.update_idletasks()
+        import sys
+        _base = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
+        self._ico_path = os.path.join(_base, "artlapse.ico")
         self.after(20, self._setup_taskbar_presence)
         self.after(20, self.apply_round_region)
-
-        # Set window / taskbar icon
-        self._icon_img = _make_app_icon(64)
-        from PIL import ImageTk
-        self._icon_photo = ImageTk.PhotoImage(self._icon_img)
-        self.iconphoto(True, self._icon_photo)
 
         # System tray
         self._tray_icon = None
@@ -1053,6 +1071,11 @@ class ArtLapseApp(ctk.CTk):
         ex_style &= ~WS_EX_TOOLWINDOW
         ex_style |=  WS_EX_APPWINDOW
         ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style)
+        import sys
+        if getattr(sys, "frozen", False):
+            self.iconbitmap(sys.executable)
+        else:
+            self.iconbitmap(self._ico_path)
 
     def _minimize(self):
         hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
