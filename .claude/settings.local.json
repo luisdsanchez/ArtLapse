@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pip show:*)"
+      "Bash(pip show:*)",
+      "Bash(python -c \"import sys; print\\(sys.executable\\)\")",
+      "Bash(pip install:*)",
+      "Bash(pyinstaller --onefile --windowed --name \"ArtLapse1.0\" ArtLapse_Compact.py)"
     ]
   }
 }
