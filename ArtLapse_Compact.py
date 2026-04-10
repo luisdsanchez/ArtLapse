@@ -670,7 +670,7 @@ class ArtLapseApp(ctk.CTk):
             text="  select a window or screen…",
             height=34, anchor="w",
             fg_color=CARD_COLOR, hover_color="#333333",
-            font=("Arial", 10), text_color="#666666",
+            font=("Arial", 12), text_color="#666666",
             corner_radius=6,
             command=self._open_picker,
         )
@@ -688,7 +688,7 @@ class ArtLapseApp(ctk.CTk):
         row2 = ctk.CTkFrame(body, fg_color="transparent")
         row2.pack(fill="x", pady=(2, 0))
         self.folder_label = ctk.CTkLabel(row2, text=config.get_short_path(self.base_path),
-                                         font=("Arial", 10), text_color="gray",
+                                         font=("Arial", 12), text_color="gray",
                                          anchor="w")
         self.folder_label.pack(side="left", fill="x", expand=True)
         ctk.CTkButton(row2, text="📁", width=44, height=34,
@@ -710,7 +710,7 @@ class ArtLapseApp(ctk.CTk):
             text="  type new or pick existing…",
             height=34, anchor="w",
             fg_color=CARD_COLOR, hover_color="#333333",
-            font=("Arial", 10), text_color="#666666",
+            font=("Arial", 12), text_color="#666666",
             corner_radius=6,
             command=self._open_project_picker,
         )
@@ -733,7 +733,7 @@ class ArtLapseApp(ctk.CTk):
 
         # Status
         self.status_label = ctk.CTkLabel(body, text="Ready",
-                                         font=("Arial", 12, "bold"),
+                                         font=("Arial", 13, "bold"),
                                          text_color="gray")
         self.status_label.pack(pady=(2, 4))
 
@@ -762,7 +762,7 @@ class ArtLapseApp(ctk.CTk):
         self.ffmpeg_btn = ctk.CTkButton(
             export_header, text="▶  Export Timelapse MP4",
             fg_color=CARD_COLOR, hover_color="#333333",
-            font=("Arial", 12, "bold"),
+            font=("Arial", 13, "bold"),
             height=38, command=self.compile_video
         )
         self.ffmpeg_btn.pack(side="left", fill="x", expand=True, padx=(0, 6))
@@ -771,7 +771,7 @@ class ArtLapseApp(ctk.CTk):
         self.collapse_btn = ctk.CTkButton(
             export_header, text="▼", width=38, height=38,
             fg_color=CARD_COLOR, hover_color="#333333",
-            font=("Arial", 12, "bold"), text_color="gray",
+            font=("Arial", 13, "bold"), text_color="gray",
             command=self._toggle_export_panel
         )
         self.collapse_btn.pack(side="left")
@@ -799,17 +799,17 @@ class ArtLapseApp(ctk.CTk):
         self.thumb_label.pack()
 
         self.frames_label = ctk.CTkLabel(left_col, text="Frames: 0",
-                                         font=("Arial", 9), text_color="gray",
+                                         font=("Arial", 11), text_color="gray",
                                          wraplength=72, justify="center")
         self.frames_label.pack(pady=(3, 0))
 
         self.size_label = ctk.CTkLabel(left_col, text="—",
-                                       font=("Arial", 9), text_color="#555555",
+                                       font=("Arial", 11), text_color="#555555",
                                        wraplength=72, justify="center")
         self.size_label.pack(pady=(1, 0))
 
         self.warn_label = ctk.CTkLabel(left_col, text="",
-                                       font=("Arial", 9), text_color="orange",
+                                       font=("Arial", 11), text_color="orange",
                                        wraplength=72, justify="center")
         self.warn_label.pack(pady=(1, 0))
 
@@ -821,7 +821,7 @@ class ArtLapseApp(ctk.CTk):
         top_row = ctk.CTkFrame(right_col, fg_color="transparent")
         top_row.pack(fill="x", pady=(0, 4))
         ctk.CTkLabel(top_row, text="Auto-export on Stop",
-                     font=("Arial", 11), anchor="w").pack(side="left")
+                     font=("Arial", 13), anchor="w").pack(side="left")
         self.auto_compile_var = ctk.BooleanVar(value=False)
         ctk.CTkSwitch(top_row, text="", variable=self.auto_compile_var,
                       width=40, button_color=ORANGE_THEME,
@@ -831,10 +831,10 @@ class ArtLapseApp(ctk.CTk):
         dur_row = ctk.CTkFrame(right_col, fg_color="transparent")
         dur_row.pack(fill="x")
         ctk.CTkLabel(dur_row, text="Duration",
-                     font=("Arial", 11), anchor="w").pack(side="left")
+                     font=("Arial", 13), anchor="w").pack(side="left")
         self.duration_val_label = ctk.CTkLabel(
             dur_row, text="30s",
-            font=("Arial", 11, "underline"),
+            font=("Arial", 13, "underline"),
             text_color=ORANGE_THEME, cursor="hand2"
         )
         self.duration_val_label.pack(side="right")
@@ -853,9 +853,9 @@ class ArtLapseApp(ctk.CTk):
 
         dur_hints = ctk.CTkFrame(right_col, fg_color="transparent")
         dur_hints.pack(fill="x", pady=(0, 2))
-        ctk.CTkLabel(dur_hints, text="15 sec", font=("Arial", 9),
+        ctk.CTkLabel(dur_hints, text="15 sec", font=("Arial", 11),
                      text_color="#444444").pack(side="left")
-        ctk.CTkLabel(dur_hints, text="Realtime", font=("Arial", 9),
+        ctk.CTkLabel(dur_hints, text="Realtime", font=("Arial", 11),
                      text_color="#444444").pack(side="right")
 
         self._dur_entry_frame = ctk.CTkFrame(right_col, fg_color="transparent")
@@ -878,9 +878,9 @@ class ArtLapseApp(ctk.CTk):
         q_row = ctk.CTkFrame(right_col, fg_color="transparent")
         q_row.pack(fill="x", pady=(4, 0))
         ctk.CTkLabel(q_row, text="Quality",
-                     font=("Arial", 11), anchor="w").pack(side="left")
+                     font=("Arial", 13), anchor="w").pack(side="left")
         self.quality_val_label = ctk.CTkLabel(q_row, text="Balanced",
-                                              font=("Arial", 10), text_color="gray")
+                                              font=("Arial", 12), text_color="gray")
         self.quality_val_label.pack(side="right")
 
         self.quality_slider = ctk.CTkSlider(
@@ -895,9 +895,9 @@ class ArtLapseApp(ctk.CTk):
 
         q_hints = ctk.CTkFrame(right_col, fg_color="transparent")
         q_hints.pack(fill="x", pady=(2, 0))
-        ctk.CTkLabel(q_hints, text="Smallest", font=("Arial", 9),
+        ctk.CTkLabel(q_hints, text="Smallest", font=("Arial", 11),
                      text_color="#444444").pack(side="left")
-        ctk.CTkLabel(q_hints, text="Highest", font=("Arial", 9),
+        ctk.CTkLabel(q_hints, text="Highest", font=("Arial", 11),
                      text_color="#444444").pack(side="right")
 
         # Shrink window to collapsed height on first draw
@@ -914,7 +914,7 @@ class ArtLapseApp(ctk.CTk):
     # ------------------------------------------------------------------ #
     def _section_label(self, parent, text):
         ctk.CTkLabel(parent, text=text,
-                     font=("Arial", 9, "bold"),
+                     font=("Arial", 11, "bold"),
                      text_color="#555555", anchor="w").pack(anchor="w", pady=(6, 0))
 
     def _click_window(self, event):
@@ -995,6 +995,21 @@ class ArtLapseApp(ctk.CTk):
         self._current_project = name
         display = (name[:32] + "…") if len(name) > 32 else name
         self._project_btn.configure(text=f"  {display}", text_color="white")
+        self._load_project_preview()
+
+    def _load_project_preview(self):
+        path = self._resolve_project_path()
+        if not path or not os.path.exists(path):
+            return
+        pngs = sorted(f for f in os.listdir(path) if f.endswith(".png"))
+        if not pngs:
+            return
+        self.final_path = path
+        self.frames_label.configure(text=f"Frames: {len(pngs)}")
+        avg_bytes = sum(os.path.getsize(os.path.join(path, f)) for f in pngs) / len(pngs)
+        total_mb = avg_bytes * len(pngs) / 1_048_576
+        self.size_label.configure(text=f"~{total_mb:.1f} MB")
+        self._update_thumbnail(os.path.join(path, pngs[-1]))
 
     def _on_target_selected(self, target: dict):
         self._capture_target = target
