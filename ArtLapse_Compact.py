@@ -1,41 +1,34 @@
 import customtkinter as ctk
-import pygetwindow as gw
-import pyautogui
+import ctypes
 import os
 import re
-import json
-import ctypes
-import subprocess
-import threading
 import shutil
 from tkinter import filedialog
 from PIL import Image
 
-# --- CONFIGURATION ---
-CONFIG_FILE = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "ArtLapse", "config.json")
-ORANGE_THEME = "#e85c25"
-ORANGE_DIM   = "#bc4a1e"
-BG_COLOR     = "#1e2123"
-CARD_COLOR   = "#262a2d"
+import config
+import capture
+import export
+from constants import (
+    ORANGE_THEME, ORANGE_DIM, BG_COLOR, CARD_COLOR, APP_W, APP_H
+)
 
 ctk.set_appearance_mode("dark")
-
-APP_W, APP_H = 400, 700
 
 
 class ArtLapseApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        # --- WINDOW SETUP ---
         self.overrideredirect(True)
         self.geometry(f"{APP_W}x{APP_H}")
         self.configure(fg_color=BG_COLOR)
         self.update_idletasks()
         self.after(20, self._setup_taskbar_presence)
         self.after(20, self.apply_round_region)
+
         self.is_recording  = False
-        self.base_path     = self.load_config()
+        self.base_path     = config.load_config()
         self.after_id      = None
         self.count         = 1
         self.final_path    = ""
@@ -85,7 +78,7 @@ class ArtLapseApp(ctk.CTk):
             widget.bind("<Button-1>",  self._click_window)
             widget.bind("<B1-Motion>", self._drag_window)
 
-        # ── BODY (scrollable content area) ──────────────────────────────
+        # ── BODY ────────────────────────────────────────────────────────
         body = ctk.CTkFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=18, pady=(0, 14))
 
@@ -93,7 +86,7 @@ class ArtLapseApp(ctk.CTk):
         self._section_label(body, "CAPTURE WINDOW")
         row1 = ctk.CTkFrame(body, fg_color="transparent")
         row1.pack(fill="x", pady=(2, 0))
-        self.window_dropdown = ctk.CTkComboBox(row1, values=self.get_window_titles(), width=290)
+        self.window_dropdown = ctk.CTkComboBox(row1, values=capture.get_window_titles(), width=290)
         self.window_dropdown.pack(side="left")
         ctk.CTkButton(row1, text="⟳", width=44, height=34,
                       fg_color=CARD_COLOR, hover_color="#333333",
@@ -104,7 +97,7 @@ class ArtLapseApp(ctk.CTk):
         self._section_label(body, "OUTPUT FOLDER")
         row2 = ctk.CTkFrame(body, fg_color="transparent")
         row2.pack(fill="x", pady=(2, 0))
-        self.folder_label = ctk.CTkLabel(row2, text=self.get_short_path(),
+        self.folder_label = ctk.CTkLabel(row2, text=config.get_short_path(self.base_path),
                                          font=("Arial", 10), text_color="gray",
                                          anchor="w", width=254)
         self.folder_label.pack(side="left")
@@ -121,7 +114,7 @@ class ArtLapseApp(ctk.CTk):
         self._section_label(body, "PROJECT NAME  ·  type new or pick existing")
         proj_row = ctk.CTkFrame(body, fg_color="transparent")
         proj_row.pack(fill="x", pady=(2, 0))
-        self.project_combo = ctk.CTkComboBox(proj_row, values=self.get_existing_projects(), width=310)
+        self.project_combo = ctk.CTkComboBox(proj_row, values=config.get_existing_projects(self.base_path), width=310)
         self.project_combo.pack(side="left")
         self.delete_btn = ctk.CTkButton(
             proj_row, text="🗑", width=44, height=34,
@@ -195,7 +188,6 @@ class ArtLapseApp(ctk.CTk):
         # Hidden until recording is paused
 
         # ── EXPORT SECTION ──────────────────────────────────────────────
-        # Header row: export button + collapse toggle
         export_header = ctk.CTkFrame(body, fg_color="transparent")
         export_header.pack(fill="x", pady=(0, 0))
 
@@ -230,8 +222,7 @@ class ArtLapseApp(ctk.CTk):
                       width=40, button_color=ORANGE_THEME,
                       progress_color=ORANGE_DIM).pack(side="right")
 
-        # ── Duration slider (snapping) ───────────────────────────────────
-        # None = "Realtime" (fps-based, not duration-based)
+        # Duration slider (snapping)
         self._dur_snaps  = [15, 30, 45, 60, 90, 120, 180, 240, 300, 420, 600, None]
         self._dur_labels = ["15s", "30s", "45s", "1m", "1m30s",
                             "2m", "3m", "4m", "5m", "7m", "10m", "Realtime"]
@@ -241,7 +232,6 @@ class ArtLapseApp(ctk.CTk):
         ctk.CTkLabel(dur_row, text="Duration",
                      font=("Arial", 11), anchor="w").pack(side="left")
 
-        # Clickable orange underlined label → toggles inline entry
         self.duration_val_label = ctk.CTkLabel(
             dur_row, text="30s",
             font=("Arial", 11, "underline"),
@@ -258,7 +248,7 @@ class ArtLapseApp(ctk.CTk):
             progress_color=ORANGE_THEME,
             command=self._on_duration_slide
         )
-        self.duration_slider.set(1)   # default = 30s
+        self.duration_slider.set(1)
         self.duration_slider.pack(fill="x", padx=10, pady=(2, 0))
 
         dur_hints = ctk.CTkFrame(self.export_card, fg_color="transparent")
@@ -268,7 +258,6 @@ class ArtLapseApp(ctk.CTk):
         ctk.CTkLabel(dur_hints, text="Realtime", font=("Arial", 9),
                      text_color="#444444").pack(side="right")
 
-        # Inline entry — hidden by default, shown on label click
         self._dur_entry_frame = ctk.CTkFrame(self.export_card, fg_color="transparent")
         self.duration_entry = ctk.CTkEntry(
             self._dur_entry_frame, height=28,
@@ -284,9 +273,8 @@ class ArtLapseApp(ctk.CTk):
             font=("Arial", 12, "bold"),
             command=self._apply_duration_entry
         ).pack(side="left")
-        # Note: NOT packed here — shown/hidden dynamically
 
-        # ── Quality slider ───────────────────────────────────────────────
+        # Quality slider
         q_row = ctk.CTkFrame(self.export_card, fg_color="transparent")
         q_row.pack(fill="x", padx=10, pady=(4, 0))
         ctk.CTkLabel(q_row, text="Quality",
@@ -313,7 +301,7 @@ class ArtLapseApp(ctk.CTk):
                      text_color="#444444").pack(side="right")
 
     # ------------------------------------------------------------------ #
-    #  HELPERS                                                             #
+    #  UI HELPERS                                                          #
     # ------------------------------------------------------------------ #
     def _section_label(self, parent, text):
         ctk.CTkLabel(parent, text=text,
@@ -330,28 +318,25 @@ class ArtLapseApp(ctk.CTk):
         self.geometry(f"+{x}+{y}")
 
     # ------------------------------------------------------------------ #
-    #  BORDERLESS VIA WINDOWS API                                          #
+    #  BORDERLESS WINDOW — WIN32                                           #
     # ------------------------------------------------------------------ #
     def _setup_taskbar_presence(self):
-        """
-        overrideredirect windows have no taskbar entry and vanish on focus loss.
-        Fix: set the WS_EX_APPWINDOW extended style on the underlying HWND so
-        Windows treats it as a top-level app window — it stays visible, appears
-        in the taskbar, and can be minimized normally.
-        """
         GWL_EXSTYLE      = -20
         WS_EX_APPWINDOW  = 0x00040000
         WS_EX_TOOLWINDOW = 0x00000080
         hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
         ex_style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-        ex_style &= ~WS_EX_TOOLWINDOW   # remove "hide from taskbar" flag
-        ex_style |=  WS_EX_APPWINDOW    # add "show in taskbar" flag
+        ex_style &= ~WS_EX_TOOLWINDOW
+        ex_style |=  WS_EX_APPWINDOW
         ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style)
 
     def _minimize(self):
         hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
-        ctypes.windll.user32.ShowWindow(hwnd, 6)   # SW_MINIMIZE = 6
+        ctypes.windll.user32.ShowWindow(hwnd, 6)
 
+    # ------------------------------------------------------------------ #
+    #  EXPORT PANEL CONTROLS                                               #
+    # ------------------------------------------------------------------ #
     def _update_interval_label(self, val):
         self.label_interval.configure(text=f"{int(float(val))} s")
         self._refresh_size_estimate()
@@ -367,7 +352,6 @@ class ArtLapseApp(ctk.CTk):
             self.export_card.pack_forget()
             self.collapse_btn.configure(text="▼")
             self._export_collapsed = True
-            # Shrink window to fit remaining content
             self.update_idletasks()
             new_h = self.winfo_reqheight()
             self.geometry(f"{APP_W}x{new_h}")
@@ -378,7 +362,6 @@ class ArtLapseApp(ctk.CTk):
         self.duration_slider.set(idx)
         self._custom_duration_secs = None
         self.duration_val_label.configure(text=self._dur_labels[idx])
-        # Hide entry if open when sliding to Realtime
         if self._dur_snaps[idx] is None:
             self._dur_entry_frame.pack_forget()
 
@@ -386,17 +369,15 @@ class ArtLapseApp(ctk.CTk):
         if getattr(self, "_custom_duration_secs", None):
             return self._custom_duration_secs
         idx = int(round(float(self.duration_slider.get())))
-        return self._dur_snaps[idx]   # None = Realtime
+        return self._dur_snaps[idx]
 
     def _open_duration_entry(self, _event=None):
-        # Don't open entry in Realtime mode
         idx = int(round(float(self.duration_slider.get())))
         if self._dur_snaps[idx] is None:
             return
         if self._dur_entry_frame.winfo_ismapped():
             self._dur_entry_frame.pack_forget()
         else:
-            # Pack after the slider, before the hints row
             self._dur_entry_frame.pack(fill="x", padx=10, pady=(4, 0),
                                        after=self.duration_slider)
             self.after(50, self.duration_entry.focus)
@@ -412,12 +393,10 @@ class ArtLapseApp(ctk.CTk):
             elif raw.endswith('m'):
                 secs = int(float(raw[:-1]) * 60)
             else:
-                secs = int(float(raw) * 60)   # plain number = minutes
+                secs = int(float(raw) * 60)
 
-            secs = max(5, min(secs, 3600))
-
-            # Find nearest non-Realtime snap
-            snaps = [(i, s) for i, s in enumerate(self._dur_snaps) if s is not None]
+            secs   = max(5, min(secs, 3600))
+            snaps  = [(i, s) for i, s in enumerate(self._dur_snaps) if s is not None]
             closest = min(snaps, key=lambda x: abs(x[1] - secs))
             self.duration_slider.set(closest[0])
             if abs(closest[1] - secs) <= 5:
@@ -448,56 +427,20 @@ class ArtLapseApp(ctk.CTk):
         return self._QUALITY_CRF[idx], self._QUALITY_PRESET[idx]
 
     # ------------------------------------------------------------------ #
-    #  CONFIG                                                              #
+    #  FOLDER / PROJECT HELPERS                                            #
     # ------------------------------------------------------------------ #
-    def load_config(self):
-        if os.path.exists(CONFIG_FILE):
-            try:
-                with open(CONFIG_FILE, "r") as f:
-                    return json.load(f).get("base_path", "")
-            except Exception:
-                pass
-        return ""
-
-    def save_config(self):
-        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-        with open(CONFIG_FILE, "w") as f:
-            json.dump({"base_path": self.base_path}, f)
-
-    # ------------------------------------------------------------------ #
-    #  WINDOW / FOLDER HELPERS                                            #
-    # ------------------------------------------------------------------ #
-    def get_short_path(self):
-        if not self.base_path:
-            return "Not Set"
-        return f"…{self.base_path[-34:]}" if len(self.base_path) > 36 else self.base_path
-
-    def get_window_titles(self):
-        titles = [w.title for w in gw.getAllWindows() if w.title.strip()]
-        return titles or ["No Windows Found"]
-
     def refresh_windows(self):
-        self.window_dropdown.configure(values=self.get_window_titles())
-
-    def get_existing_projects(self):
-        if self.base_path and os.path.exists(self.base_path):
-            try:
-                return [d for d in os.listdir(self.base_path)
-                        if os.path.isdir(os.path.join(self.base_path, d))] or ["New Project"]
-            except Exception:
-                pass
-        return ["New Project"]
+        self.window_dropdown.configure(values=capture.get_window_titles())
 
     def choose_folder(self):
         path = filedialog.askdirectory()
         if path:
             self.base_path = path
-            self.save_config()
-            self.folder_label.configure(text=self.get_short_path())
-            self.project_combo.configure(values=self.get_existing_projects())
+            config.save_config(self.base_path)
+            self.folder_label.configure(text=config.get_short_path(self.base_path))
+            self.project_combo.configure(values=config.get_existing_projects(self.base_path))
 
     def open_output_folder(self):
-        """Open the currently selected output folder (or base path) in Explorer."""
         target = self.final_path if self.final_path and os.path.exists(self.final_path) else self.base_path
         if target and os.path.exists(target):
             os.startfile(target)
@@ -505,7 +448,6 @@ class ArtLapseApp(ctk.CTk):
             self.status_label.configure(text="No folder to open", text_color="orange")
 
     def delete_project(self):
-        """Show a confirmation dialog then permanently delete the selected project folder."""
         name = self.project_combo.get().strip()
         if not name or name == "New Project" or not self.base_path:
             self.status_label.configure(text="No project selected to delete", text_color="orange")
@@ -516,23 +458,20 @@ class ArtLapseApp(ctk.CTk):
             self.status_label.configure(text="Folder not found", text_color="orange")
             return
 
-        # Block deletion of the currently active/recording project
         if target == self.final_path and self.is_recording:
             self.status_label.configure(text="Can't delete — currently recording", text_color="red")
             return
 
-        # --- Confirmation dialog ---
         dialog = ctk.CTkToplevel(self)
         dialog.overrideredirect(True)
         dialog.configure(fg_color="#2a1a1a")
         dialog.resizable(False, False)
 
         dw, dh = 300, 160
-        # Centre over main window
         cx = self.winfo_x() + (APP_W - dw) // 2
         cy = self.winfo_y() + (APP_H - dh) // 2
         dialog.geometry(f"{dw}x{dh}+{cx}+{cy}")
-        dialog.grab_set()   # modal
+        dialog.grab_set()
 
         ctk.CTkLabel(dialog, text="Delete project?",
                      font=("Arial Black", 13, "bold"),
@@ -548,12 +487,11 @@ class ArtLapseApp(ctk.CTk):
             dialog.destroy()
             try:
                 shutil.rmtree(target)
-                # If this was the loaded project, reset state
                 if target == self.final_path:
                     self.stop_and_reset()
                 else:
                     self.project_combo.set("")
-                    self.project_combo.configure(values=self.get_existing_projects())
+                    self.project_combo.configure(values=config.get_existing_projects(self.base_path))
                 self.status_label.configure(text=f'"{name}" deleted', text_color="gray")
             except Exception as e:
                 self.status_label.configure(text=f"Delete failed: {e}", text_color="red")
@@ -565,7 +503,7 @@ class ArtLapseApp(ctk.CTk):
                       command=confirm, width=130).pack(side="right")
 
     # ------------------------------------------------------------------ #
-    #  FRAME-COUNT RESET GUARD                                            #
+    #  SIZE ESTIMATE + THUMBNAIL                                           #
     # ------------------------------------------------------------------ #
     def _resolve_project_path(self):
         name = self.project_combo.get().strip()
@@ -573,11 +511,7 @@ class ArtLapseApp(ctk.CTk):
             return None
         return os.path.join(self.base_path, name)
 
-    # ------------------------------------------------------------------ #
-    #  SIZE ESTIMATE                                                       #
-    # ------------------------------------------------------------------ #
     def _refresh_size_estimate(self):
-        """Estimate disk usage: avg PNG size × number of frames in session."""
         if not self.final_path or not os.path.exists(self.final_path):
             self.size_label.configure(text="Est. size: —")
             return
@@ -591,9 +525,6 @@ class ArtLapseApp(ctk.CTk):
         total_mb = avg_bytes * len(pngs) / 1_048_576
         self.size_label.configure(text=f"Est. size: {total_mb:.1f} MB  ({len(pngs)} frames)")
 
-    # ------------------------------------------------------------------ #
-    #  THUMBNAIL                                                           #
-    # ------------------------------------------------------------------ #
     def _update_thumbnail(self, img_path: str):
         try:
             img = Image.open(img_path)
@@ -603,7 +534,7 @@ class ArtLapseApp(ctk.CTk):
             pass
 
     # ------------------------------------------------------------------ #
-    #  CAPTURE LOOP                                                        #
+    #  CAPTURE                                                             #
     # ------------------------------------------------------------------ #
     def toggle_capture(self):
         if not self.is_recording:
@@ -612,7 +543,6 @@ class ArtLapseApp(ctk.CTk):
                 self.status_label.configure(text="Set a folder & project name first", text_color="red")
                 return
 
-            # Only reset count if switching to a different project
             if path != self.final_path:
                 self.final_path = path
                 os.makedirs(self.final_path, exist_ok=True)
@@ -622,7 +552,7 @@ class ArtLapseApp(ctk.CTk):
 
             self.is_recording = True
             self.start_btn.configure(text="⏸  PAUSE", fg_color="#333333", hover_color="#444444")
-            self.stop_btn.pack_forget()   # hide stop while actively recording
+            self.stop_btn.pack_forget()
             self.status_label.configure(text=f"Recording — frame {self.count}", text_color=ORANGE_THEME)
             self.warn_label.configure(text="")
             self.capture_loop()
@@ -632,24 +562,21 @@ class ArtLapseApp(ctk.CTk):
                 self.after_cancel(self.after_id)
                 self.after_id = None
             self.start_btn.configure(text="▶  RESUME", fg_color=ORANGE_THEME, hover_color=ORANGE_DIM)
-            self.stop_btn.pack(side="left", padx=(6, 0))   # show stop when paused
+            self.stop_btn.pack(side="left", padx=(6, 0))
             self.status_label.configure(text="Paused", text_color="orange")
 
     def stop_and_reset(self):
-        """Stop recording and fully reset the app for a new project."""
         self.is_recording = False
         if self.after_id:
             self.after_cancel(self.after_id)
             self.after_id = None
 
-        # Auto-export before wiping state so path is still valid
         export_path = self.final_path
         if self.auto_compile_var.get() and export_path and os.path.exists(export_path):
             self.compile_video(path_override=export_path)
 
         self.final_path = ""
         self.count      = 1
-
         self.start_btn.configure(text="START", fg_color=ORANGE_THEME, hover_color=ORANGE_DIM)
         self.stop_btn.pack_forget()
         self.status_label.configure(
@@ -661,48 +588,36 @@ class ArtLapseApp(ctk.CTk):
         self.size_label.configure(text="Est. size: —")
         self.thumb_label.configure(image="", text="no preview")
         self._thumb_photo = None
-        self.project_combo.configure(values=self.get_existing_projects())
+        self.project_combo.configure(values=config.get_existing_projects(self.base_path))
         self.project_combo.set("")
 
     def capture_loop(self):
         if not self.is_recording:
             return
 
-        target  = self.window_dropdown.get()
-        windows = gw.getWindowsWithTitle(target)
+        save_path = os.path.join(self.final_path, f"shot_{self.count:04d}.png")
+        captured, warning = capture.capture_frame(self.window_dropdown.get(), save_path)
 
-        if not windows:
-            self.warn_label.configure(text="⚠ Window not found — retrying…")
-        else:
-            win = windows[0]
-            if win.isMinimized:
-                self.warn_label.configure(text="⚠ Window is minimized — skipping frame")
-            else:
-                self.warn_label.configure(text="")
-                region     = (win.left, win.top, win.width, win.height)
-                screenshot = pyautogui.screenshot(region=region)
-                save_path  = os.path.join(self.final_path, f"shot_{self.count:04d}.png")
-                screenshot.save(save_path)
-                self.status_label.configure(text=f"Recording — frame {self.count}")
-                self.frames_label.configure(text=f"Frames: {self.count}")
-                self.count += 1
-                self._update_thumbnail(save_path)
-                self._refresh_size_estimate()
+        self.warn_label.configure(text=warning)
+        if captured:
+            self.status_label.configure(text=f"Recording — frame {self.count}")
+            self.frames_label.configure(text=f"Frames: {self.count}")
+            self.count += 1
+            self._update_thumbnail(save_path)
+            self._refresh_size_estimate()
 
         interval_ms = int(float(self.slider_interval.get()) * 1000)
         self.after_id = self.after(interval_ms, self.capture_loop)
 
     # ------------------------------------------------------------------ #
-    #  VIDEO COMPILATION                                                   #
+    #  EXPORT                                                              #
     # ------------------------------------------------------------------ #
     def compile_video(self, path_override=None):
-        # Resolve path: prefer explicit override, then selected project, then active recording
         path = path_override or self._resolve_project_path() or self.final_path
         if not path or not os.path.exists(path):
             self.status_label.configure(text="Select a project to export", text_color="orange")
             return
 
-        # Collect ALL pngs in folder, sorted naturally — works with any naming scheme
         pngs = sorted(
             [f for f in os.listdir(path) if f.lower().endswith(".png")],
             key=lambda x: x.lower()
@@ -720,69 +635,28 @@ class ArtLapseApp(ctk.CTk):
         n            = len(pngs)
 
         if duration_sec is None:
-            # Realtime: fixed 24 fps, duration = n / 24
-            fps          = 24.0
-            duration_sec = round(n / 24, 1)
-            dur_str      = "Realtime (24fps)"
+            fps      = 24.0
+            dur_str  = "Realtime (24fps)"
         else:
-            fps     = round(n / duration_sec, 4)
-            fps     = max(fps, 0.1)
+            fps     = round(max(n / duration_sec, 0.1), 4)
             mins, s = divmod(duration_sec, 60)
             dur_str = f"{mins}m{s}s" if mins else f"{duration_sec}s"
 
-        out_file = os.path.join(path, "timelapse.mp4")
-        self.status_label.configure(
-            text=f"Exporting {n} frames at {fps:.2f} fps…", text_color="gray"
-        )
+        self.status_label.configure(text=f"Exporting {n} frames at {fps:.2f} fps…", text_color="gray")
         self.ffmpeg_btn.configure(state="disabled")
 
-        def run():
-            # Write a concat list — ffmpeg reads this to find every frame in order,
-            # regardless of filename or gaps in numbering.
-            concat_path = os.path.join(path, "_concat_list.txt")
-            try:
-                with open(concat_path, "w") as f:
-                    for png in pngs:
-                        # escape backslashes and single quotes for ffmpeg concat format
-                        safe = os.path.join(path, png).replace("\\", "/").replace("'", "\\'")
-                        f.write(f"file '{safe}'\n")
-                        f.write("duration 1\n")   # each frame = 1/framerate controlled below
+        def on_done(size_mb, out_path):
+            msg = f"Exported ✓  {n} frames · {dur_str} · {size_mb:.1f} MB"
+            self.after(0, lambda: self.status_label.configure(text=msg, text_color=ORANGE_THEME))
+            self.after(0, lambda: os.startfile(out_path))
 
-                cmd = [
-                    "ffmpeg", "-y",
-                    "-f",        "concat",
-                    "-safe",     "0",
-                    "-i",        concat_path,
-                    "-vf",       f"fps={fps}",
-                    "-c:v",      "libx264",
-                    "-preset",   preset,
-                    "-crf",      str(crf),
-                    "-pix_fmt",  "yuv420p",
-                    "-movflags", "+faststart",
-                    out_file
-                ]
-                result = subprocess.run(cmd, capture_output=True, text=True)
-                if result.returncode == 0:
-                    size_mb = os.path.getsize(out_file) / 1_048_576
-                    msg = f"Exported ✓  {n} frames · {dur_str} · {size_mb:.1f} MB"
-                    self.after(0, lambda: self.status_label.configure(
-                        text=msg, text_color=ORANGE_THEME))
-                    self.after(0, lambda: os.startfile(path))
-                else:
-                    self.after(0, lambda: self.status_label.configure(
-                        text="ffmpeg error — check console", text_color="red"))
-                    print(result.stderr)
-            except Exception as e:
-                err_msg = str(e)
-                self.after(0, lambda: self.status_label.configure(
-                    text=err_msg, text_color="red"))
-            finally:
-                # Clean up temp concat file
-                if os.path.exists(concat_path):
-                    os.remove(concat_path)
-                self.after(0, lambda: self.ffmpeg_btn.configure(state="normal"))
+        def on_error(msg):
+            self.after(0, lambda: self.status_label.configure(text=msg, text_color="red"))
 
-        threading.Thread(target=run, daemon=True).start()
+        def on_finally():
+            self.after(0, lambda: self.ffmpeg_btn.configure(state="normal"))
+
+        export.run_export(path, pngs, fps, crf, preset, on_done, on_error, on_finally)
 
 
 if __name__ == "__main__":
