@@ -362,6 +362,7 @@ class ArtLapseApp(ctk.CTk):
             self.collapse_btn.configure(text="▲")
             self._export_collapsed = False
             self.after(10, lambda: self.geometry(f"{APP_W}x{APP_H}"))
+            self.after(20, lambda: self.apply_round_region(APP_W, APP_H))
         else:
             self.export_card.pack_forget()
             self.collapse_btn.configure(text="▼")
