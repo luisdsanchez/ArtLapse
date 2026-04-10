@@ -643,18 +643,26 @@ class ArtLapseApp(ctk.CTk):
         btn_frame = ctk.CTkFrame(hdr, fg_color="transparent")
         btn_frame.place(relx=1.0, rely=0.5, anchor="e", x=-8)
 
-        ctk.CTkButton(btn_frame, text="—", width=34, height=34,
+        _min_btn = ctk.CTkButton(btn_frame, text="—", width=34, height=34,
                       fg_color="transparent", hover_color="#333333",
                       font=("Arial", 15, "bold"),
-                      corner_radius=8, command=self._minimize).pack(side="left", padx=2)
-        ctk.CTkButton(btn_frame, text="⬛", width=34, height=34,
+                      corner_radius=8, command=self._minimize)
+        _min_btn.pack(side="left", padx=2)
+        self._bind_tooltip(_min_btn, "Minimize")
+
+        _tray_btn = ctk.CTkButton(btn_frame, text="⬛", width=34, height=34,
                       fg_color="transparent", hover_color="#333333",
                       font=("Arial", 11), text_color=ORANGE_THEME,
-                      corner_radius=8, command=self._hide_to_tray).pack(side="left", padx=2)
-        ctk.CTkButton(btn_frame, text="✕", width=34, height=34,
+                      corner_radius=8, command=self._hide_to_tray)
+        _tray_btn.pack(side="left", padx=2)
+        self._bind_tooltip(_tray_btn, "Hide to system tray")
+
+        _close_btn = ctk.CTkButton(btn_frame, text="✕", width=34, height=34,
                       fg_color="transparent", hover_color="#c42b1c",
                       font=("Arial", 15, "bold"),
-                      corner_radius=8, command=self._quit_app).pack(side="left", padx=2)
+                      corner_radius=8, command=self._quit_app)
+        _close_btn.pack(side="left", padx=2)
+        self._bind_tooltip(_close_btn, "Quit ArtLapse")
 
         for widget in (hdr,):
             widget.bind("<Button-1>",  self._click_window)
@@ -665,63 +673,60 @@ class ArtLapseApp(ctk.CTk):
         body.pack(fill="both", expand=True, padx=18, pady=(0, 14))
 
         # Capture target picker
-        self._section_label(body, "CAPTURE TARGET")
+        self._step_target_lbl = self._section_label(body, "1 · Capture Target")
         row1 = ctk.CTkFrame(body, fg_color="transparent")
         row1.pack(fill="x", pady=(2, 0))
 
         self._target_btn = ctk.CTkButton(
             row1,
-            text="  select a window or screen…",
+            text="  Click to select a window or screen…",
             height=34, anchor="w",
             fg_color=CARD_COLOR, hover_color="#333333",
             font=("Arial", 12), text_color="#666666",
             corner_radius=6,
             command=self._open_picker,
         )
-        self._target_btn.pack(side="left", fill="x", expand=True)
-
-        ctk.CTkButton(
-            row1, text="⛶", width=44, height=34,
-            fg_color=CARD_COLOR, hover_color="#333333",
-            font=("Arial", 19),
-            command=self._open_picker,
-        ).pack(side="left", padx=(6, 0))
+        self._target_btn.pack(fill="x")
 
         # Folder picker
-        self._section_label(body, "OUTPUT FOLDER")
+        self._section_label(body, "2 · Output Folder")
         row2 = ctk.CTkFrame(body, fg_color="transparent")
         row2.pack(fill="x", pady=(2, 0))
         self.folder_label = ctk.CTkLabel(row2, text=config.get_short_path(self.base_path),
                                          font=("Arial", 12), text_color="gray",
                                          anchor="w")
         self.folder_label.pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(row2, text="📁", width=44, height=34,
+        _browse_btn = ctk.CTkButton(row2, text="📁", width=44, height=34,
                       fg_color=CARD_COLOR, hover_color="#333333",
                       font=("Arial", 16),
-                      command=self.choose_folder).pack(side="left", padx=(6, 0))
-        ctk.CTkButton(row2, text="▲", width=38, height=34,
+                      command=self.choose_folder)
+        _browse_btn.pack(side="left", padx=(6, 0))
+        self._bind_tooltip(_browse_btn, "Browse for output folder")
+        _open_btn = ctk.CTkButton(row2, text="▲", width=38, height=34,
                       fg_color=CARD_COLOR, hover_color=ORANGE_DIM,
                       font=("Arial", 17, "bold"), text_color=ORANGE_THEME,
-                      command=self.open_output_folder).pack(side="left", padx=(4, 0))
+                      command=self.open_output_folder)
+        _open_btn.pack(side="left", padx=(4, 0))
+        self._bind_tooltip(_open_btn, "Open folder in Explorer")
 
         # Project name
-        self._section_label(body, "PROJECT NAME  ·  type new or pick existing")
+        self._step_project_lbl = self._section_label(body, "3 · Project Name")
         proj_row = ctk.CTkFrame(body, fg_color="transparent")
         proj_row.pack(fill="x", pady=(2, 0))
 
         self._project_btn = ctk.CTkButton(
             proj_row,
-            text="  type new or pick existing…",
+            text="  Click to name or pick a project…",
             height=34, anchor="w",
             fg_color=CARD_COLOR, hover_color="#333333",
             font=("Arial", 12), text_color="#666666",
             corner_radius=6,
             command=self._open_project_picker,
         )
-        self._project_btn.pack(side="left", fill="x", expand=True)
+        self._project_btn.pack(fill="x")
 
         # Interval slider
-        self._section_label(body, "INTERVAL")
+        self._section_label(body, "4 · Capture Interval")
         self.label_interval = ctk.CTkLabel(body, text="10 s",
                                            font=("Arial Black", 13),
                                            text_color=ORANGE_THEME)
@@ -752,11 +757,13 @@ class ArtLapseApp(ctk.CTk):
         self._smart_cb.pack(side="left")
         self._smart_cb.bind("<Enter>", self._show_smart_tooltip)
         self._smart_cb.bind("<Leave>", self._hide_smart_tooltip)
+        ctk.CTkLabel(smart_row, text="— skips saving identical frames",
+                     font=("Arial", 10), text_color="#555555").pack(side="left", padx=(6, 0))
 
-        # Status
-        self.status_label = ctk.CTkLabel(body, text="Ready",
+        # Status / guidance
+        self.status_label = ctk.CTkLabel(body, text="▲ Step 1 — pick a capture target to begin",
                                          font=("Arial", 13, "bold"),
-                                         text_color="gray")
+                                         text_color="#666666")
         self.status_label.pack(pady=(2, 4))
 
         # Start / stop buttons
@@ -764,9 +771,10 @@ class ArtLapseApp(ctk.CTk):
         btn_row.pack(fill="x", pady=(0, 4))
 
         self.start_btn = ctk.CTkButton(
-            btn_row, text="START", fg_color=ORANGE_THEME,
-            hover_color=ORANGE_DIM, font=("Arial Black", 16, "bold"),
-            height=52, command=self.toggle_capture
+            btn_row, text="START", fg_color="#2a2a2a",
+            hover_color="#2a2a2a", text_color="#555555",
+            font=("Arial Black", 16, "bold"),
+            height=52, state="disabled", command=self.toggle_capture
         )
         self.start_btn.pack(side="left", fill="x", expand=True)
 
@@ -935,9 +943,11 @@ class ArtLapseApp(ctk.CTk):
     #  UI HELPERS                                                          #
     # ------------------------------------------------------------------ #
     def _section_label(self, parent, text):
-        ctk.CTkLabel(parent, text=text,
-                     font=("Arial", 11, "bold"),
-                     text_color="#555555", anchor="w").pack(anchor="w", pady=(6, 0))
+        lbl = ctk.CTkLabel(parent, text=text,
+                           font=("Arial", 11, "bold"),
+                           text_color="#555555", anchor="w")
+        lbl.pack(anchor="w", pady=(6, 0))
+        return lbl
 
     def _show_smart_tooltip(self, event=None):
         if self._tooltip_win:
@@ -961,6 +971,66 @@ class ArtLapseApp(ctk.CTk):
         if self._tooltip_win:
             self._tooltip_win.destroy()
             self._tooltip_win = None
+
+    def _bind_tooltip(self, widget, text: str):
+        """Attach a small hover tooltip to any widget."""
+        tip = [None]
+
+        def _show(*_):
+            if tip[0]:
+                return
+            x = widget.winfo_rootx()
+            y = widget.winfo_rooty() - 30
+            tip[0] = ctk.CTkToplevel(self)
+            tip[0].overrideredirect(True)
+            tip[0].wm_attributes("-topmost", True)
+            tip[0].configure(fg_color="#2a2d2f")
+            tip[0].geometry(f"+{x}+{y}")
+            ctk.CTkLabel(tip[0], text=text, font=("Arial", 10),
+                         text_color="#cccccc").pack(padx=8, pady=4)
+
+        def _hide(*_):
+            if tip[0]:
+                tip[0].destroy()
+                tip[0] = None
+
+        widget.bind("<Enter>", _show, add="+")
+        widget.bind("<Leave>", _hide, add="+")
+
+    def _update_status_guidance(self):
+        """Update the status label and step colours to guide the user."""
+        if self.is_recording:
+            return
+        if self._capture_target is None:
+            self.status_label.configure(
+                text="▲ Step 1 — pick a capture target to begin",
+                text_color="#666666")
+            self._step_target_lbl.configure(text_color="#cc7733")
+            self._step_project_lbl.configure(text_color="#555555")
+        elif not self._current_project.strip():
+            self.status_label.configure(
+                text="▲ Step 3 — name your project to continue",
+                text_color="#666666")
+            self._step_target_lbl.configure(text_color="#55aa55")
+            self._step_project_lbl.configure(text_color="#cc7733")
+        else:
+            self.status_label.configure(text="Ready — press START", text_color="gray")
+            self._step_target_lbl.configure(text_color="#55aa55")
+            self._step_project_lbl.configure(text_color="#55aa55")
+
+    def _refresh_start_btn(self):
+        """Enable or disable the START button based on required fields."""
+        if self.is_recording:
+            return
+        ready = self._capture_target is not None and bool(self._current_project.strip())
+        if ready:
+            self.start_btn.configure(
+                state="normal", fg_color=ORANGE_THEME, hover_color=ORANGE_DIM,
+                text_color="white")
+        else:
+            self.start_btn.configure(
+                state="disabled", fg_color="#2a2a2a", hover_color="#2a2a2a",
+                text_color="#555555")
 
     def _click_window(self, event):
         self._offsetx = event.x_root - self.winfo_x()
@@ -1041,6 +1111,8 @@ class ArtLapseApp(ctk.CTk):
         display = (name[:32] + "…") if len(name) > 32 else name
         self._project_btn.configure(text=f"  {display}", text_color="white")
         self._load_project_preview()
+        self._update_status_guidance()
+        self._refresh_start_btn()
 
     def _load_project_preview(self):
         path = self._resolve_project_path()
@@ -1064,6 +1136,8 @@ class ArtLapseApp(ctk.CTk):
             name = target["title"]
         display = (name[:32] + "…") if len(name) > 32 else name
         self._target_btn.configure(text=f"  {display}", text_color="white")
+        self._update_status_guidance()
+        self._refresh_start_btn()
 
     # ------------------------------------------------------------------ #
     #  EXPORT PANEL CONTROLS                                               #
@@ -1303,7 +1377,9 @@ class ArtLapseApp(ctk.CTk):
 
             self.is_recording = True
             self._identical_streak = 0; self._prev_thumb_bytes = None
-            self.start_btn.configure(text="⏸  PAUSE", fg_color="#333333", hover_color="#444444")
+            self.start_btn.configure(
+                state="normal", text="⏸  PAUSE", fg_color="#333333", hover_color="#444444",
+                text_color="white")
             self.stop_btn.pack_forget()
             self.status_label.configure(text=f"Recording — frame {self.count}", text_color=ORANGE_THEME)
             self.warn_label.configure(text="")
@@ -1314,9 +1390,11 @@ class ArtLapseApp(ctk.CTk):
             if self.after_id:
                 self.after_cancel(self.after_id)
                 self.after_id = None
-            self.start_btn.configure(text="▶  RESUME", fg_color=ORANGE_THEME, hover_color=ORANGE_DIM)
+            self.start_btn.configure(
+                state="normal", text="▶  RESUME", fg_color=ORANGE_THEME, hover_color=ORANGE_DIM,
+                text_color="white")
             self.stop_btn.pack(side="left", padx=(6, 0))
-            self.status_label.configure(text="Paused", text_color="orange")
+            self.status_label.configure(text="Paused — press ▶ to resume or ⏹ to stop", text_color="orange")
 
     def stop_and_reset(self):
         self.is_recording = False
@@ -1331,19 +1409,18 @@ class ArtLapseApp(ctk.CTk):
         self.final_path = ""
         self.count      = 1
         self._frame_hashes.clear()
-        self.start_btn.configure(text="START", fg_color=ORANGE_THEME, hover_color=ORANGE_DIM)
         self.stop_btn.pack_forget()
-        self.status_label.configure(
-            text="Exporting…" if self.auto_compile_var.get() and export_path else "Ready",
-            text_color="gray"
-        )
+        if self.auto_compile_var.get() and export_path:
+            self.status_label.configure(text="Exporting…", text_color="gray")
         self.warn_label.configure(text="")
         self.frames_label.configure(text="Frames: 0")
         self.size_label.configure(text="—")
         self.thumb_label.configure(image="", text="no preview")
         self._thumb_photo = None
         self._current_project = ""
-        self._project_btn.configure(text="  type new or pick existing…", text_color="#666666")
+        self._project_btn.configure(text="  Click to name or pick a project…", text_color="#666666")
+        self._update_status_guidance()
+        self._refresh_start_btn()
 
     def capture_loop(self):
         if not self.is_recording:
