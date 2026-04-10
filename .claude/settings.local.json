@@ -16,7 +16,8 @@
       "Bash(del /F /Q \"%localappdata%\\\\Microsoft\\\\Windows\\\\Explorer\\\\iconcache*\")",
       "Bash(start explorer.exe)",
       "Bash(cmd /c \"taskkill /IM explorer.exe /F & del /F /Q \\\\\"%localappdata%\\\\IconCache.db\\\\\" & del /F /Q \\\\\"%localappdata%\\\\Microsoft\\\\Windows\\\\Explorer\\\\iconcache*\\\\\" & start explorer.exe\")",
-      "Bash(pyinstaller ArtLapse1.01.spec)"
+      "Bash(pyinstaller ArtLapse1.01.spec)",
+      "Bash(pyinstaller ArtLapse1.02.spec)"
     ]
   }
 }

@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import threading
+import tkinter as tk
 from tkinter import filedialog
 from PIL import Image, ImageDraw
 import pystray
@@ -973,16 +974,17 @@ class ArtLapseApp(ctk.CTk):
             return
         x = self._smart_cb.winfo_rootx()
         y = self._smart_cb.winfo_rooty() - 52
-        self._tooltip_win = ctk.CTkToplevel(self)
+        self._tooltip_win = tk.Toplevel(self)
         self._tooltip_win.overrideredirect(True)
         self._tooltip_win.wm_attributes("-topmost", True)
-        self._tooltip_win.configure(fg_color="#2a2d2f")
+        self._tooltip_win.configure(bg="#2a2d2f")
         self._tooltip_win.geometry(f"+{x}+{y}")
-        ctk.CTkLabel(
+        tk.Label(
             self._tooltip_win,
             text="Skips saving a frame if the screen\nhasn't changed for 5 consecutive shots.",
             font=("Arial", 11),
-            text_color="#cccccc",
+            fg="#cccccc",
+            bg="#2a2d2f",
             justify="left",
         ).pack(padx=10, pady=6)
         self._active_tooltips.add(self._tooltip_win)
@@ -1048,14 +1050,16 @@ class ArtLapseApp(ctk.CTk):
                 return
             x = widget.winfo_rootx()
             y = widget.winfo_rooty() - 30
-            tip[0] = ctk.CTkToplevel(self)
-            tip[0].overrideredirect(True)
-            tip[0].wm_attributes("-topmost", True)
-            tip[0].configure(fg_color="#2a2d2f")
-            tip[0].geometry(f"+{x}+{y}")
-            ctk.CTkLabel(tip[0], text=text, font=("Arial", 10),
-                         text_color="#cccccc").pack(padx=8, pady=4)
-            self._active_tooltips.add(tip[0])
+            win = tk.Toplevel(self)
+            win.overrideredirect(True)
+            win.wm_attributes("-topmost", True)
+            win.configure(bg="#2a2d2f")
+            win.geometry(f"+{x}+{y}")
+            tk.Label(win, text=text, font=("Arial", 10),
+                     fg="#cccccc", bg="#2a2d2f",
+                     padx=8, pady=4).pack()
+            tip[0] = win
+            self._active_tooltips.add(win)
             self.after(50, _poll)
 
         def _hide(*_):
