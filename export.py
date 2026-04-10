@@ -24,18 +24,19 @@ def run_export(
     def run():
         concat_path = os.path.join(path, "_concat_list.txt")
         try:
+            frame_duration = round(1.0 / fps, 6)
             with open(concat_path, "w") as f:
                 for png in pngs:
                     safe = os.path.join(path, png).replace("\\", "/").replace("'", "\\'")
                     f.write(f"file '{safe}'\n")
-                    f.write("duration 1\n")
+                    f.write(f"duration {frame_duration}\n")
 
             cmd = [
                 "ffmpeg", "-y",
                 "-f",        "concat",
                 "-safe",     "0",
                 "-i",        concat_path,
-                "-vf",       f"fps={fps}",
+                "-vf",       "fps=24",
                 "-c:v",      "libx264",
                 "-preset",   preset,
                 "-crf",      str(crf),

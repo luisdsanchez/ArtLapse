@@ -123,7 +123,7 @@ class ArtLapseApp(ctk.CTk):
             command=self.delete_project
         )
         self.delete_btn.pack(side="left", padx=(6, 0))
-
+ 
         # Interval slider
         self._section_label(body, "INTERVAL")
         self.label_interval = ctk.CTkLabel(body, text="10 s",
@@ -139,29 +139,6 @@ class ArtLapseApp(ctk.CTk):
         self.slider_interval.set(10)
         self.slider_interval.pack(fill="x", pady=(0, 6))
 
-        # Thumbnail + size estimate
-        info_row = ctk.CTkFrame(body, fg_color=CARD_COLOR, corner_radius=10)
-        info_row.pack(fill="x", pady=(2, 4))
-
-        self.thumb_label = ctk.CTkLabel(info_row, text="no preview",
-                                        width=80, height=46,
-                                        font=("Arial", 9), text_color="#555555",
-                                        fg_color="#1a1d1f", corner_radius=8)
-        self.thumb_label.pack(side="left", padx=8, pady=6)
-
-        stats = ctk.CTkFrame(info_row, fg_color="transparent")
-        stats.pack(side="left", padx=6, pady=6, fill="both", expand=True)
-        self.frames_label = ctk.CTkLabel(stats, text="Frames: 0",
-                                         font=("Arial", 11), anchor="w")
-        self.frames_label.pack(anchor="w")
-        self.size_label   = ctk.CTkLabel(stats, text="Est. size: —",
-                                         font=("Arial", 11), anchor="w",
-                                         text_color="gray")
-        self.size_label.pack(anchor="w")
-        self.warn_label   = ctk.CTkLabel(stats, text="",
-                                         font=("Arial", 10), anchor="w",
-                                         text_color="orange")
-        self.warn_label.pack(anchor="w")
 
         # Status
         self.status_label = ctk.CTkLabel(body, text="Ready",
@@ -212,9 +189,47 @@ class ArtLapseApp(ctk.CTk):
         self.export_card = ctk.CTkFrame(body, fg_color=CARD_COLOR, corner_radius=10)
         self.export_card.pack(fill="x", pady=(4, 0))
 
+        # ── Two-column layout: thumbnail left, settings right ────────────
+        self._dur_snaps  = [15, 30, 45, 60, 90, 120, 180, 240, 300, 420, 600, None]
+        self._dur_labels = ["15s", "30s", "45s", "1m", "1m30s",
+                            "2m", "3m", "4m", "5m", "7m", "10m", "Realtime"]
+
+        cols = ctk.CTkFrame(self.export_card, fg_color="transparent")
+        cols.pack(fill="x", padx=8, pady=(8, 8))
+
+        # Left column — thumbnail + stats
+        left_col = ctk.CTkFrame(cols, fg_color="transparent", width=76)
+        left_col.pack(side="left", fill="y", padx=(0, 8))
+        left_col.pack_propagate(False)
+
+        self.thumb_label = ctk.CTkLabel(left_col, text="no\npreview",
+                                        width=72, height=50,
+                                        font=("Arial", 8), text_color="#555555",
+                                        fg_color="#1a1d1f", corner_radius=6)
+        self.thumb_label.pack()
+
+        self.frames_label = ctk.CTkLabel(left_col, text="Frames: 0",
+                                         font=("Arial", 9), text_color="gray",
+                                         wraplength=72, justify="center")
+        self.frames_label.pack(pady=(3, 0))
+
+        self.size_label = ctk.CTkLabel(left_col, text="—",
+                                       font=("Arial", 9), text_color="#555555",
+                                       wraplength=72, justify="center")
+        self.size_label.pack(pady=(1, 0))
+
+        self.warn_label = ctk.CTkLabel(left_col, text="",
+                                       font=("Arial", 9), text_color="orange",
+                                       wraplength=72, justify="center")
+        self.warn_label.pack(pady=(1, 0))
+
+        # Right column — export settings
+        right_col = ctk.CTkFrame(cols, fg_color="transparent")
+        right_col.pack(side="left", fill="both", expand=True)
+
         # Auto-export toggle
-        top_row = ctk.CTkFrame(self.export_card, fg_color="transparent")
-        top_row.pack(fill="x", padx=10, pady=(8, 2))
+        top_row = ctk.CTkFrame(right_col, fg_color="transparent")
+        top_row.pack(fill="x", pady=(0, 4))
         ctk.CTkLabel(top_row, text="Auto-export on Stop",
                      font=("Arial", 11), anchor="w").pack(side="left")
         self.auto_compile_var = ctk.BooleanVar(value=False)
@@ -222,16 +237,11 @@ class ArtLapseApp(ctk.CTk):
                       width=40, button_color=ORANGE_THEME,
                       progress_color=ORANGE_DIM).pack(side="right")
 
-        # Duration slider (snapping)
-        self._dur_snaps  = [15, 30, 45, 60, 90, 120, 180, 240, 300, 420, 600, None]
-        self._dur_labels = ["15s", "30s", "45s", "1m", "1m30s",
-                            "2m", "3m", "4m", "5m", "7m", "10m", "Realtime"]
-
-        dur_row = ctk.CTkFrame(self.export_card, fg_color="transparent")
-        dur_row.pack(fill="x", padx=10, pady=(6, 0))
+        # Duration
+        dur_row = ctk.CTkFrame(right_col, fg_color="transparent")
+        dur_row.pack(fill="x")
         ctk.CTkLabel(dur_row, text="Duration",
                      font=("Arial", 11), anchor="w").pack(side="left")
-
         self.duration_val_label = ctk.CTkLabel(
             dur_row, text="30s",
             font=("Arial", 11, "underline"),
@@ -241,7 +251,7 @@ class ArtLapseApp(ctk.CTk):
         self.duration_val_label.bind("<Button-1>", self._open_duration_entry)
 
         self.duration_slider = ctk.CTkSlider(
-            self.export_card,
+            right_col,
             from_=0, to=len(self._dur_snaps) - 1,
             number_of_steps=len(self._dur_snaps) - 1,
             button_color=ORANGE_THEME,
@@ -249,19 +259,19 @@ class ArtLapseApp(ctk.CTk):
             command=self._on_duration_slide
         )
         self.duration_slider.set(1)
-        self.duration_slider.pack(fill="x", padx=10, pady=(2, 0))
+        self.duration_slider.pack(fill="x", pady=(2, 0))
 
-        dur_hints = ctk.CTkFrame(self.export_card, fg_color="transparent")
-        dur_hints.pack(fill="x", padx=10, pady=(0, 2))
+        dur_hints = ctk.CTkFrame(right_col, fg_color="transparent")
+        dur_hints.pack(fill="x", pady=(0, 2))
         ctk.CTkLabel(dur_hints, text="15 sec", font=("Arial", 9),
                      text_color="#444444").pack(side="left")
         ctk.CTkLabel(dur_hints, text="Realtime", font=("Arial", 9),
                      text_color="#444444").pack(side="right")
 
-        self._dur_entry_frame = ctk.CTkFrame(self.export_card, fg_color="transparent")
+        self._dur_entry_frame = ctk.CTkFrame(right_col, fg_color="transparent")
         self.duration_entry = ctk.CTkEntry(
             self._dur_entry_frame, height=28,
-            placeholder_text='minutes — e.g. "1.5" or "2m30s"',
+            placeholder_text='e.g. "1.5" or "2m30s"',
             font=("Arial", 11)
         )
         self.duration_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
@@ -274,9 +284,9 @@ class ArtLapseApp(ctk.CTk):
             command=self._apply_duration_entry
         ).pack(side="left")
 
-        # Quality slider
-        q_row = ctk.CTkFrame(self.export_card, fg_color="transparent")
-        q_row.pack(fill="x", padx=10, pady=(4, 0))
+        # Quality
+        q_row = ctk.CTkFrame(right_col, fg_color="transparent")
+        q_row.pack(fill="x", pady=(4, 0))
         ctk.CTkLabel(q_row, text="Quality",
                      font=("Arial", 11), anchor="w").pack(side="left")
         self.quality_val_label = ctk.CTkLabel(q_row, text="Balanced",
@@ -284,17 +294,17 @@ class ArtLapseApp(ctk.CTk):
         self.quality_val_label.pack(side="right")
 
         self.quality_slider = ctk.CTkSlider(
-            self.export_card, from_=0, to=4,
+            right_col, from_=0, to=4,
             number_of_steps=4,
             button_color=ORANGE_THEME,
             progress_color=ORANGE_THEME,
             command=self._update_quality_label
         )
         self.quality_slider.set(2)
-        self.quality_slider.pack(fill="x", padx=10, pady=(2, 0))
+        self.quality_slider.pack(fill="x", pady=(2, 0))
 
-        q_hints = ctk.CTkFrame(self.export_card, fg_color="transparent")
-        q_hints.pack(fill="x", padx=10, pady=(2, 10))
+        q_hints = ctk.CTkFrame(right_col, fg_color="transparent")
+        q_hints.pack(fill="x", pady=(2, 0))
         ctk.CTkLabel(q_hints, text="Smallest", font=("Arial", 9),
                      text_color="#444444").pack(side="left")
         ctk.CTkLabel(q_hints, text="Highest", font=("Arial", 9),
@@ -513,22 +523,22 @@ class ArtLapseApp(ctk.CTk):
 
     def _refresh_size_estimate(self):
         if not self.final_path or not os.path.exists(self.final_path):
-            self.size_label.configure(text="Est. size: —")
+            self.size_label.configure(text="—")
             return
         pngs = [f for f in os.listdir(self.final_path) if f.endswith(".png")]
         if not pngs:
-            self.size_label.configure(text="Est. size: —")
+            self.size_label.configure(text="—")
             return
         avg_bytes = sum(
             os.path.getsize(os.path.join(self.final_path, f)) for f in pngs
         ) / len(pngs)
         total_mb = avg_bytes * len(pngs) / 1_048_576
-        self.size_label.configure(text=f"Est. size: {total_mb:.1f} MB  ({len(pngs)} frames)")
+        self.size_label.configure(text=f"~{total_mb:.1f} MB")
 
     def _update_thumbnail(self, img_path: str):
         try:
             img = Image.open(img_path)
-            self._thumb_photo = ctk.CTkImage(light_image=img, size=(80, 46))
+            self._thumb_photo = ctk.CTkImage(light_image=img, size=(72, 50))
             self.thumb_label.configure(image=self._thumb_photo, text="")
         except Exception:
             pass
@@ -585,7 +595,7 @@ class ArtLapseApp(ctk.CTk):
         )
         self.warn_label.configure(text="")
         self.frames_label.configure(text="Frames: 0")
-        self.size_label.configure(text="Est. size: —")
+        self.size_label.configure(text="—")
         self.thumb_label.configure(image="", text="no preview")
         self._thumb_photo = None
         self.project_combo.configure(values=config.get_existing_projects(self.base_path))
