@@ -746,18 +746,28 @@ class ArtLapseApp(ctk.CTk):
         self._project_btn.pack(fill="x")
 
         # Interval slider
+        self.INTERVAL_STEPS = [0.5, 1, 2.5, 5, 10, 15, 20, 30, 40, 50, 60]
         self._section_label(body, "4 · Capture Interval")
-        self.label_interval = ctk.CTkLabel(body, text="10 s",
+        self.label_interval = ctk.CTkLabel(body, text="2.5 s",
                                            font=("Arial Black", 13),
                                            text_color=ORANGE_THEME)
         self.label_interval.pack(anchor="e")
         self.slider_interval = ctk.CTkSlider(
-            body, from_=1, to=60,
+            body, from_=0, to=len(self.INTERVAL_STEPS) - 1,
+            number_of_steps=len(self.INTERVAL_STEPS) - 1,
             button_color=ORANGE_THEME,
             progress_color=ORANGE_THEME,
             command=self._update_interval_label
         )
-        self.slider_interval.set(10)
+        # Default notch marker above slider
+        self._interval_marker = tk.Canvas(
+            body, height=8, bg=BG_COLOR,
+            highlightthickness=0
+        )
+        self._interval_marker.pack(fill="x", pady=(0, 0))
+        self._interval_marker.bind("<Configure>", self._draw_interval_marker)
+
+        self.slider_interval.set(self.INTERVAL_STEPS.index(2.5))
         self.slider_interval.pack(fill="x", pady=(0, 4))
 
         # Smart Capture toggle
@@ -1221,9 +1231,37 @@ class ArtLapseApp(ctk.CTk):
     # ------------------------------------------------------------------ #
     #  EXPORT PANEL CONTROLS                                               #
     # ------------------------------------------------------------------ #
+    def _draw_interval_marker(self, _event=None):
+        c = self._interval_marker
+        c.delete("all")
+        w = c.winfo_width()
+        if w < 10:
+            return
+        # Align with CTkSlider thumb: use its internal button radius if available
+        try:
+            pad = self.slider_interval._button_radius
+        except AttributeError:
+            pad = 10
+        track_w = w - 2 * pad
+        default_idx = self.INTERVAL_STEPS.index(2.5)
+        total_steps = len(self.INTERVAL_STEPS) - 1
+        x = pad + int(track_w * default_idx / total_steps)
+        # Draw downward-pointing triangle
+        size = 5
+        c.create_polygon(
+            x, 8, x - size, 0, x + size, 0,
+            fill=ORANGE_THEME, outline=""
+        )
+
+    def _get_interval_seconds(self):
+        idx = round(self.slider_interval.get())
+        return self.INTERVAL_STEPS[idx]
+
     def _update_interval_label(self, val):
-        self.label_interval.configure(text=f"{int(float(val))} s")
-        self._refresh_size_estimate()
+        idx = round(float(val))
+        v = self.INTERVAL_STEPS[idx]
+        text = f"{v:.1f} s" if v % 1 else f"{int(v)} s"
+        self.label_interval.configure(text=text)
 
     def _toggle_export_panel(self):
         if self._export_collapsed:
@@ -1447,12 +1485,11 @@ class ArtLapseApp(ctk.CTk):
                 self.status_label.configure(text="Set a folder & project name first", text_color="red")
                 return
 
-            if path != self.final_path:
-                self.final_path = path
-                os.makedirs(self.final_path, exist_ok=True)
-                existing = [f for f in os.listdir(self.final_path) if f.endswith(".png")]
-                self.count = len(existing) + 1
-                self.frames_label.configure(text=f"Frames: {len(existing)}")
+            self.final_path = path
+            os.makedirs(self.final_path, exist_ok=True)
+            existing = [f for f in os.listdir(self.final_path) if f.endswith(".png")]
+            self.count = len(existing) + 1
+            self.frames_label.configure(text=f"Frames: {len(existing)}")
 
             self.is_recording = True
             self._identical_streak = 0; self._prev_thumb_bytes = None
@@ -1505,22 +1542,20 @@ class ArtLapseApp(ctk.CTk):
         if not self.is_recording:
             return
 
-        interval_ms = int(float(self.slider_interval.get()) * 1000)
+        interval_ms = int(self._get_interval_seconds() * 1000)
         save_path   = os.path.join(self.final_path, f"shot_{self.count:04d}.png")
 
         if self.smart_capture_var.get():
             img, warning = capture.capture_frame_raw(self._capture_target)
             captured = False
             if img is not None:
-                import struct
                 thumb_bytes = img.resize((32, 32)).convert("L").tobytes()
                 prev = getattr(self, "_prev_thumb_bytes", None)
-                self._prev_thumb_bytes = thumb_bytes
 
                 if prev is not None:
                     # mean absolute difference across the 32×32 grayscale thumbnail
                     diff = sum(abs(a - b) for a, b in zip(thumb_bytes, prev)) / 1024
-                    same = diff < 4.0  # threshold: avg pixel change < 4/255
+                    same = diff < 0.2  # threshold: avg pixel change < 0.2/255
                 else:
                     same = False
 
@@ -1528,6 +1563,12 @@ class ArtLapseApp(ctk.CTk):
                     self._identical_streak = getattr(self, "_identical_streak", 0) + 1
                 else:
                     self._identical_streak = 0
+
+                # Only advance the baseline while not paused — this way the paused
+                # frame acts as an anchor, so any meaningful change from it is
+                # detected even if the transition happens gradually frame-by-frame.
+                if self._identical_streak < 4:
+                    self._prev_thumb_bytes = thumb_bytes
 
                 if self._identical_streak >= 4:   # 5th identical frame → pause
                     self.warn_label.configure(text="")
