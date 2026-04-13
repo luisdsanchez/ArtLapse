@@ -256,12 +256,13 @@ def capture_frame_raw(target) -> "tuple[Image.Image | None, str]":
     return img, ""
 
 
-def capture_frame(target, save_path: str) -> tuple[bool, str]:
+def capture_frame(target, save_path: str, jpeg_quality: "int | None" = None) -> tuple[bool, str]:
     """
     Capture a frame to save_path.
       target: dict  {"type": "window", "hwnd": int, ...}
                  or {"type": "screen", "left": int, "top": int, "width": int, "height": int, ...}
       Also accepts a plain str (window title) for backward compatibility.
+      jpeg_quality: if set, saves as JPEG at the given quality (1–95); otherwise PNG.
     """
     if isinstance(target, str):
         target = _resolve_window_by_title(target)
@@ -269,7 +270,7 @@ def capture_frame(target, save_path: str) -> tuple[bool, str]:
             return False, "⚠ Window not found — retrying…"
 
     if target.get("type") == "screen":
-        return _capture_screen_frame(target, save_path)
+        return _capture_screen_frame(target, save_path, jpeg_quality)
 
     # Window capture
     hwnd = target.get("hwnd")
@@ -293,16 +294,24 @@ def capture_frame(target, save_path: str) -> tuple[bool, str]:
     if img is None:
         return False, "⚠ Capture failed"
 
-    img.convert("RGB").save(save_path)
+    _save_image(img, save_path, jpeg_quality)
     return True, ""
 
 
-def _capture_screen_frame(monitor: dict, save_path: str) -> tuple[bool, str]:
+def _save_image(img: "Image.Image", save_path: str, jpeg_quality: "int | None"):
+    rgb = img.convert("RGB")
+    if jpeg_quality is not None:
+        rgb.save(save_path, "JPEG", quality=jpeg_quality)
+    else:
+        rgb.save(save_path)
+
+
+def _capture_screen_frame(monitor: dict, save_path: str, jpeg_quality: "int | None" = None) -> tuple[bool, str]:
     img = _bitblt_capture(monitor["left"], monitor["top"],
                           monitor["width"], monitor["height"])
     if img is None:
         return False, "⚠ Screen capture failed"
-    img.convert("RGB").save(save_path)
+    _save_image(img, save_path, jpeg_quality)
     return True, ""
 
 

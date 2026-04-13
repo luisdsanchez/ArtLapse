@@ -7,4 +7,4 @@ ORANGE_DIM   = "#bc4a1e"
 BG_COLOR     = "#1e2123"
 CARD_COLOR   = "#262a2d"
 
-APP_W, APP_H = 400, 700
+APP_W, APP_H = 400, 780

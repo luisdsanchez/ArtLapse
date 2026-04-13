@@ -708,6 +708,32 @@ class ArtLapseApp(ctk.CTk):
         )
         self._target_btn.pack(fill="x")
 
+        # Capture Quality — manual button group (avoids CTkSegmentedButton resize bugs)
+        cq_row = ctk.CTkFrame(body, fg_color="transparent")
+        cq_row.pack(fill="x", pady=(10, 10))
+        ctk.CTkLabel(cq_row, text="Capture Quality",
+                     font=("Arial", 12), text_color="#aaaaaa").pack(side="left")
+        self._capture_quality_var = ctk.StringVar(value="Native")
+        _cq_btn_frame = ctk.CTkFrame(cq_row, fg_color="transparent")
+        _cq_btn_frame.pack(side="right")
+        _cq_tooltips = {"Low": "JPEG 55% — smallest files", "Med": "JPEG 75% — balanced", "High": "PNG lossless — full quality"}
+        self._cq_buttons = {}
+        for _label in ["Low", "Med", "High"]:
+            _b = ctk.CTkButton(
+                _cq_btn_frame, text=_label,
+                width=50, height=26,
+                font=("Arial", 11),
+                fg_color=CARD_COLOR, hover_color="#333333",
+                text_color="#aaaaaa",
+                corner_radius=5,
+                border_width=0,
+                command=lambda l=_label: self._set_capture_quality(l),
+            )
+            _b.pack(side="left", padx=3)
+            self._cq_buttons[_label] = _b
+            self._bind_tooltip(_b, _cq_tooltips[_label])
+        self._set_capture_quality("High")
+
         # Folder picker
         self._section_label(body, "2 · Output Folder")
         row2 = ctk.CTkFrame(body, fg_color="transparent")
@@ -1348,6 +1374,20 @@ class ArtLapseApp(ctk.CTk):
         idx = int(round(float(self.quality_slider.get())))
         return self._QUALITY_CRF[idx], self._QUALITY_PRESET[idx]
 
+    # "Native" → ("png", None)   "High" → ("jpg", 92)   etc.
+    _CAPTURE_QUALITY_MAP = {"High": ("png", None), "Med": ("jpg", 75), "Low": ("jpg", 55)}
+
+    def _set_capture_quality(self, label: str):
+        self._capture_quality_var.set(label)
+        for lbl, btn in self._cq_buttons.items():
+            if lbl == label:
+                btn.configure(fg_color=ORANGE_THEME, hover_color=ORANGE_DIM, text_color="white")
+            else:
+                btn.configure(fg_color=CARD_COLOR, hover_color="#333333", text_color="#aaaaaa")
+
+    def _get_capture_quality(self):
+        return self._CAPTURE_QUALITY_MAP[self._capture_quality_var.get()]
+
     # ------------------------------------------------------------------ #
     #  FOLDER / PROJECT HELPERS                                            #
     # ------------------------------------------------------------------ #
@@ -1487,7 +1527,8 @@ class ArtLapseApp(ctk.CTk):
 
             self.final_path = path
             os.makedirs(self.final_path, exist_ok=True)
-            existing = [f for f in os.listdir(self.final_path) if f.endswith(".png")]
+            existing = [f for f in os.listdir(self.final_path)
+                        if f.lower().endswith((".png", ".jpg", ".jpeg"))]
             self.count = len(existing) + 1
             self.frames_label.configure(text=f"Frames: {len(existing)}")
 
@@ -1543,7 +1584,8 @@ class ArtLapseApp(ctk.CTk):
             return
 
         interval_ms = int(self._get_interval_seconds() * 1000)
-        save_path   = os.path.join(self.final_path, f"shot_{self.count:04d}.png")
+        fmt, jpeg_q = self._get_capture_quality()
+        save_path   = os.path.join(self.final_path, f"shot_{self.count:04d}.{fmt}")
 
         if self.smart_capture_var.get():
             img, warning = capture.capture_frame_raw(self._capture_target)
@@ -1578,10 +1620,15 @@ class ArtLapseApp(ctk.CTk):
                     self.after_id = self.after(interval_ms, self.capture_loop)
                     return
 
-                img.convert("RGB").save(save_path)
+                rgb = img.convert("RGB")
+                if jpeg_q is not None:
+                    rgb.save(save_path, "JPEG", quality=jpeg_q)
+                else:
+                    rgb.save(save_path)
                 captured = True
         else:
-            captured, warning = capture.capture_frame(self._capture_target, save_path)
+            captured, warning = capture.capture_frame(self._capture_target, save_path,
+                                                      jpeg_quality=jpeg_q)
 
         self.warn_label.configure(text=warning)
         if captured:
@@ -1605,7 +1652,7 @@ class ArtLapseApp(ctk.CTk):
             return
 
         pngs = sorted(
-            [f for f in os.listdir(path) if f.lower().endswith(".png")],
+            [f for f in os.listdir(path) if f.lower().endswith((".png", ".jpg", ".jpeg"))],
             key=lambda x: x.lower()
         )
         if not pngs:
@@ -1642,7 +1689,10 @@ class ArtLapseApp(ctk.CTk):
         def on_finally():
             self.after(0, lambda: self.ffmpeg_btn.configure(state="normal"))
 
-        export.run_export(path, pngs, fps, crf, preset, on_done, on_error, on_finally)
+        project_name  = self._current_project or os.path.basename(path)
+        quality_label = self._QUALITY_LABELS[int(round(float(self.quality_slider.get())))]
+        export.run_export(path, pngs, fps, crf, preset, on_done, on_error, on_finally,
+                          project_name=project_name, quality_label=quality_label)
 
 
 if __name__ == "__main__":

@@ -13,13 +13,21 @@ def run_export(
     on_done:    Callable[[float, str], None],   # (size_mb, out_path)
     on_error:   Callable[[str], None],          # (error_message)
     on_finally: Callable[[], None],
+    project_name:  str = "",
+    quality_label: str = "",
 ):
     """
-    Encodes frames in `path` into timelapse.mp4 using ffmpeg.
+    Encodes frames in `path` into a named timelapse .mp4 using ffmpeg.
     Runs in a background daemon thread; call all callbacks from that thread
     (caller is responsible for dispatching to the UI thread via .after(0, ...)).
     """
-    out_file = os.path.join(path, "timelapse.mp4")
+    def _safe(s: str) -> str:
+        """Strip characters that are invalid in Windows filenames."""
+        return "".join(c for c in s if c not in r'\/:*?"<>|').strip()
+
+    name_part    = _safe(project_name)  if project_name  else "Project"
+    quality_part = _safe(quality_label) if quality_label else "Export"
+    out_file = os.path.join(path, f"Timelapse_{name_part}_{quality_part}.mp4")
 
     def run():
         concat_path = os.path.join(path, "_concat_list.txt")
