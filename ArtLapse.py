@@ -3,6 +3,7 @@ import ctypes
 import math
 import os
 import shutil
+import sys
 import threading
 import tkinter as tk
 from tkinter import filedialog
@@ -2185,7 +2186,11 @@ class ArtLapseApp(ctk.CTk):
             self.status_label.configure(text=lang.t("status_no_frames"), text_color="red")
             return
 
-        if not shutil.which("ffmpeg"):
+        if getattr(sys, "frozen", False):
+            _ffmpeg_ok = os.path.isfile(os.path.join(sys._MEIPASS, "ffmpeg.exe"))
+        else:
+            _ffmpeg_ok = bool(shutil.which("ffmpeg"))
+        if not _ffmpeg_ok:
             self.status_label.configure(text=lang.t("status_no_ffmpeg"), text_color="red")
             return
 
