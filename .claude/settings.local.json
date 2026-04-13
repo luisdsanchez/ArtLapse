@@ -20,7 +20,13 @@
       "Bash(pyinstaller ArtLapse1.02.spec)",
       "Bash(ls l:/screnshoter/*.spec l:/screnshoter/*.py)",
       "Bash(pyinstaller ArtLapse1.03.spec)",
-      "Bash(tasklist)"
+      "Bash(tasklist)",
+      "Bash(pyinstaller ArtLapsev1.0.spec)",
+      "Bash(pyinstaller ArtLapsev1.0.spec --distpath .)",
+      "Bash(rm -rf build dist)",
+      "Bash(ls *.exe)",
+      "Bash(rm -f ArtLapsev1.0.exe)",
+      "Bash(rm -rf build)"
     ]
   }
 }
