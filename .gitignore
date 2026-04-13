@@ -1,2 +1,16 @@
+# Build artifacts
+*.exe
+*.spec
+build/
+dist/
 
-Art-Lapse/**
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Config
+config.json
+
+# Art-Lapse output frames
+Art-Lapse/
