@@ -1,7 +1,15 @@
 import os
+import sys
 import subprocess
 import threading
 from typing import Callable
+
+
+def _ffmpeg_path() -> str:
+    """Return path to ffmpeg — bundled exe if running from PyInstaller, else system PATH."""
+    if getattr(sys, "frozen", False):
+        return os.path.join(sys._MEIPASS, "ffmpeg.exe")
+    return "ffmpeg"
 
 
 def run_export(
@@ -40,7 +48,7 @@ def run_export(
                     f.write(f"duration {frame_duration}\n")
 
             cmd = [
-                "ffmpeg", "-y",
+                _ffmpeg_path(), "-y",
                 "-f",        "concat",
                 "-safe",     "0",
                 "-i",        concat_path,
