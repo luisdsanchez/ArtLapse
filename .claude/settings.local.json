@@ -19,7 +19,8 @@
       "Bash(pyinstaller ArtLapse1.01.spec)",
       "Bash(pyinstaller ArtLapse1.02.spec)",
       "Bash(ls l:/screnshoter/*.spec l:/screnshoter/*.py)",
-      "Bash(pyinstaller ArtLapse1.03.spec)"
+      "Bash(pyinstaller ArtLapse1.03.spec)",
+      "Bash(tasklist)"
     ]
   }
 }
