@@ -39,7 +39,7 @@ A lightweight Windows desktop app for recording timelapses of any open window on
 
 4. Run the app:
    ```bash
-   python ArtLapse_Compact.py
+   python ArtLapse.py
    ```
 
 ## Usage
@@ -58,7 +58,7 @@ Captured frames are saved as `shot_0001.png`, `shot_0002.png`, etc. inside `base
 
 ```
 ArtLapse/
-├── ArtLapse_Compact.py   # Main entry point and UI
+├── ArtLapse.py           # Main entry point and UI
 ├── capture.py            # Window capture logic
 ├── export.py             # FFmpeg export (runs in background thread)
 ├── config.py             # Config load/save helpers

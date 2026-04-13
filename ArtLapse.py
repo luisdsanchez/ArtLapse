@@ -501,6 +501,7 @@ class ProjectPickerPopup(ctk.CTkToplevel):
         icon_area.pack_propagate(False)
         ctk.CTkLabel(
             icon_area, text="📁", font=("Arial", 14), fg_color="transparent",
+            text_color=ORANGE_THEME,
         ).place(relx=0.5, rely=0.5, anchor="center")
 
         # Name + frame count
@@ -604,6 +605,7 @@ class ArtLapseApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
+        self.title("ArtLapse")
         self.overrideredirect(True)
         self.geometry(f"{APP_W}x{APP_H}")
         self.configure(fg_color=BG_COLOR)
@@ -655,7 +657,7 @@ class ArtLapseApp(ctk.CTk):
         hdr.pack_propagate(False)
 
         ctk.CTkLabel(
-            hdr, text="ART-LAPSE",
+            hdr, text="ARTLAPSE",
             font=("Arial Black", 21, "bold"),
             text_color=ORANGE_THEME
         ).place(relx=0.5, rely=0.55, anchor="center")
@@ -743,8 +745,8 @@ class ArtLapseApp(ctk.CTk):
                                          anchor="w")
         self.folder_label.pack(side="left", fill="x", expand=True)
         _browse_btn = ctk.CTkButton(row2, text="📁", width=44, height=34,
-                      fg_color=CARD_COLOR, hover_color="#333333",
-                      font=("Arial", 16),
+                      fg_color=CARD_COLOR, hover_color=ORANGE_DIM,
+                      text_color=ORANGE_THEME, font=("Arial", 16),
                       command=self.choose_folder)
         _browse_btn.pack(side="left", padx=(6, 0))
         self._bind_tooltip(_browse_btn, "Browse for output folder")

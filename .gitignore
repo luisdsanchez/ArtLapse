@@ -12,5 +12,5 @@ __pycache__/
 # Config
 config.json
 
-# Art-Lapse output frames
-Art-Lapse/
+# ArtLapse output frames
+ArtLapse/
