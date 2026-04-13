@@ -26,7 +26,9 @@
       "Bash(rm -rf build dist)",
       "Bash(ls *.exe)",
       "Bash(rm -f ArtLapsev1.0.exe)",
-      "Bash(rm -rf build)"
+      "Bash(rm -rf build)",
+      "Bash(python -c \"import ArtLapse\")",
+      "Bash(python -c \"import lang; import config; print\\('lang ok'\\); lang.set_lang\\('es'\\); print\\(lang.t\\('btn_start'\\)\\); print\\(lang.t\\('section_target'\\)\\)\")"
     ]
   }
 }

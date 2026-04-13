@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 620" width="660" height="620">
+  <!-- Left half-circle: background color (dark mode: #1e2123, light mode: #F2EBD9) -->
+  <path d="M320,60 A270,270 0 0,0 320,580 Z" fill="#1e2123"/>
+  <!-- Right half-circle: accent color (dark mode: #e85c25, light mode: #2A8B7A) -->
+  <path d="M340,60 A270,270 0 0,1 340,580 Z" fill="#e85c25"/>
+</svg>

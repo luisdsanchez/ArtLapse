@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 620" width="660" height="620">
+  <!-- Left half-circle: off-white background -->
+  <path d="M320,60 A270,270 0 0,0 320,580 Z" fill="#F2EBD9"/>
+  <!-- Right half-circle: green accent -->
+  <path d="M340,60 A270,270 0 0,1 340,580 Z" fill="#2A8B7A"/>
+</svg>
