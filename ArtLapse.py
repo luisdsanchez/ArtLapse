@@ -188,7 +188,7 @@ class UpdatePopup(ctk.CTkToplevel):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class WindowPickerPopup(ctk.CTkToplevel):
-    _POPUP_W = 520
+    _POPUP_W = 524
     _POPUP_H = 460
     _CARD_W  = 152    # (520 - scrollbar~16 - 14*2 - 8*2) // 3
     _THUMB_W = 148    # CARD_W - 4
@@ -226,6 +226,48 @@ class WindowPickerPopup(ctk.CTkToplevel):
         hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
         _apply_dwm_round(hwnd, large=False)
 
+    @staticmethod
+    def _make_reload_icon(size: int = 18, color: str | None = None) -> "ctk.CTkImage":
+        """Render a reload icon using PIL with 4× supersampling. Returns a CTkImage."""
+        if color is None:
+            color = T["subtext"]
+        scale = 4
+        s = size * scale
+        img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+
+        cx, cy = s / 2, s / 2
+        r  = s * 0.38
+        lw = max(2, round(s * 0.115))
+
+        # Clockwise arc with gap on the right side (from ~1 o'clock down to ~4 o'clock)
+        arc_start = 65    # start of visible arc (~4:30 o'clock)
+        arc_end   = 320   # end of visible arc (~1 o'clock, where arrow sits)
+        bbox = (cx - r, cy - r, cx + r, cy + r)
+        draw.arc(bbox, start=arc_start, end=arc_end, fill=color, width=lw)
+
+        # Arrowhead at arc_end, pointing in the clockwise travel direction
+        e_rad  = math.radians(arc_end)
+        tip_x  = cx + r * math.cos(e_rad)
+        tip_y  = cy + r * math.sin(e_rad)
+        tang_x = -math.sin(e_rad)   # clockwise tangent
+        tang_y =  math.cos(e_rad)
+        perp_x = -tang_y            # perpendicular (for arrow width)
+        perp_y =  tang_x
+
+        aw = lw * 1.5   # arrow half-width
+        al = lw * 2.4   # arrow length
+
+        p_tip  = (tip_x + tang_x * al * 0.5,  tip_y + tang_y * al * 0.5)
+        p_left = (tip_x - tang_x * al * 0.5 + perp_x * aw,
+                  tip_y - tang_y * al * 0.5 + perp_y * aw)
+        p_right= (tip_x - tang_x * al * 0.5 - perp_x * aw,
+                  tip_y - tang_y * al * 0.5 - perp_y * aw)
+        draw.polygon([p_tip, p_left, p_right], fill=color)
+
+        img = img.resize((size, size), Image.LANCZOS)
+        return ctk.CTkImage(light_image=img, size=(size, size))
+
     # ── UI construction ───────────────────────────────────────────────────────
 
     def _build_ui(self):
@@ -247,10 +289,10 @@ class WindowPickerPopup(ctk.CTkToplevel):
         btn_area = ctk.CTkFrame(tbar, fg_color="transparent")
         btn_area.place(relx=1.0, rely=0.5, anchor="e", x=-6)
 
+        _reload_img = self._make_reload_icon(size=18, color=T["subtext"])
         ctk.CTkButton(
-            btn_area, text="↺", width=30, height=30,
+            btn_area, text="", image=_reload_img, width=30, height=30,
             fg_color="transparent", hover_color=T["hover"],
-            font=("Arial", 15, "bold"), text_color="#888888",
             command=self._reload,
         ).pack(side="left", padx=(0, 2))
 
@@ -421,7 +463,7 @@ class WindowPickerPopup(ctk.CTkToplevel):
             width=self._THUMB_W, height=self._THUMB_H,
             fg_color=T["card_inner"], corner_radius=6,
         )
-        thumb_lbl.pack(padx=2, pady=(2, 0))
+        thumb_lbl.pack(padx=2, pady=(4, 0))
         card._thumb_lbl = thumb_lbl
 
         # Bottom row: icon + title
@@ -438,7 +480,7 @@ class WindowPickerPopup(ctk.CTkToplevel):
         display = (title[:20] + "…") if len(title) > 20 else title
         ctk.CTkLabel(
             bot, text=display,
-            font=("Arial", 9), text_color=T["primary"], anchor="w",
+            font=("Arial", 11), text_color=T["primary"], anchor="w",
         ).pack(side="left", padx=(3, 0))
 
         self._bind_card(card, info)
@@ -456,7 +498,7 @@ class WindowPickerPopup(ctk.CTkToplevel):
                 card.after_cancel(_leave_id[0])
                 _leave_id[0] = None
             if not self._is_current(info):
-                card.configure(border_color="#4a5055")
+                card.configure(border_color=T["accent"])
 
         def on_leave(*_):
             def _do():
@@ -647,12 +689,12 @@ class ProjectPickerPopup(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             info_col, text=name,
-            font=("Arial", 10, "bold"), text_color=T["primary"], anchor="w",
+            font=("Arial", 11, "bold"), text_color=T["primary"], anchor="w",
         ).pack(anchor="w")
         ctk.CTkLabel(
             info_col,
             text=lang.t("frame_plural" if frame_count != 1 else "frame_single", n=frame_count),
-            font=("Arial", 9), text_color=T["muted"], anchor="w",
+            font=("Arial", 10), text_color=T["muted"], anchor="w",
         ).pack(anchor="w")
 
         # Delete button — excluded from click-to-select binding
@@ -1328,6 +1370,14 @@ class SettingsPopup(ctk.CTkToplevel):
             b.pack(side="left", padx=(0, 4))
             self._theme_btns[name] = b
 
+        # ── Version footer ────────────────────────────────────────────────────
+        ctk.CTkLabel(
+            body,
+            text=f"ArtLapse V.{constants.APP_VERSION}  ·  By Luis Diego Sánchez",
+            font=("Arial", 10),
+            text_color=T["subtext"],
+        ).pack(side="bottom", pady=(10, 2))
+
     # ── callbacks ─────────────────────────────────────────────────────────────
 
     def _select_lang(self, code: str):
@@ -1452,9 +1502,9 @@ class ArtLapseApp(ctk.CTk):
 
         self.title("ArtLapse")
         self.overrideredirect(True)
+        self.attributes("-alpha", 0)
         self.geometry(f"{APP_W}x{APP_H}")
         self.configure(fg_color=T["bg"])
-        self.update_idletasks()
         import sys
         _base = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
         self._ico_path = os.path.join(_base, "assets", "artlapse.ico")
@@ -1640,7 +1690,17 @@ class ArtLapseApp(ctk.CTk):
             corner_radius=6,
             command=self._open_project_picker,
         )
-        self._project_btn.pack(fill="x")
+        self._project_btn.pack(side="left", fill="x", expand=True)
+
+        self._open_project_folder_btn = ctk.CTkButton(
+            proj_row, text="▲", width=38, height=34,
+            fg_color=T["card"], hover_color=T["accent_dim"],
+            font=("Arial", 17, "bold"), text_color=T["muted"],
+            corner_radius=6,
+            command=self._open_project_folder,
+        )
+        self._open_project_folder_btn.pack(side="left", padx=(4, 0))
+        self._bind_tooltip(self._open_project_folder_btn, "Open project folder")
 
         # Interval slider
         self.INTERVAL_STEPS = [0.5, 1, 2.5, 5, 10, 15, 20, 30, 40, 50, 60]
@@ -1691,11 +1751,43 @@ class ArtLapseApp(ctk.CTk):
         self._smart_caption_lbl.pack(side="left", padx=(6, 0))
         self._bind_tooltip(self._smart_cb, lambda: lang.t("smart_tooltip"))
 
+        # ── Stats row: thumbnail + frames + size ─────────────────────────
+        self._stats_row = ctk.CTkFrame(body, fg_color=T["card"], corner_radius=10)
+        self._stats_row.pack(fill="x", pady=(8, 0))
+        stats_row = self._stats_row
+
+        stats_inner = ctk.CTkFrame(stats_row, fg_color="transparent")
+        stats_inner.pack(fill="x", padx=8, pady=6)
+
+        self.thumb_label = ctk.CTkLabel(stats_inner, text=lang.t("thumb_no_preview"),
+                                        width=72, height=50,
+                                        font=("Arial", 8), text_color=T["muted"],
+                                        fg_color=T["card_inner"], corner_radius=6)
+        self.thumb_label.pack(side="left", padx=(0, 10))
+
+        stats_text = ctk.CTkFrame(stats_inner, fg_color="transparent")
+        stats_text.pack(side="left", fill="both", expand=True)
+
+        self.frames_label = ctk.CTkLabel(stats_text, text=lang.t("frames_zero"),
+                                         font=("Arial", 11), text_color="gray",
+                                         anchor="w")
+        self.frames_label.pack(anchor="w")
+
+        self.size_label = ctk.CTkLabel(stats_text, text="—",
+                                       font=("Arial", 11), text_color=T["muted"],
+                                       anchor="w")
+        self.size_label.pack(anchor="w")
+
+        self.warn_label = ctk.CTkLabel(stats_text, text="",
+                                       font=("Arial", 11), text_color="orange",
+                                       anchor="w")
+        self.warn_label.pack(anchor="w")
+
         # Status / guidance
         self.status_label = ctk.CTkLabel(body, text=lang.t("status_step1"),
                                          font=("Arial", 13, "bold"),
                                          text_color=T["subtext"])
-        self.status_label.pack(pady=(2, 4))
+        self.status_label.pack(pady=(12, 4))
 
         # Start / stop buttons
         btn_row = ctk.CTkFrame(body, fg_color="transparent")
@@ -1733,46 +1825,19 @@ class ArtLapseApp(ctk.CTk):
         self.auto_compile_var = ctk.BooleanVar(value=config.load_auto_export())
         self._export_popup = None
 
-        # ── Stats row: thumbnail + frames + size ─────────────────────────
-        self._stats_row = ctk.CTkFrame(body, fg_color=T["card"], corner_radius=10)
-        self._stats_row.pack(fill="x", pady=(6, 0))
-        stats_row = self._stats_row
-
-        stats_inner = ctk.CTkFrame(stats_row, fg_color="transparent")
-        stats_inner.pack(fill="x", padx=8, pady=6)
-
-        self.thumb_label = ctk.CTkLabel(stats_inner, text=lang.t("thumb_no_preview"),
-                                        width=72, height=50,
-                                        font=("Arial", 8), text_color=T["muted"],
-                                        fg_color=T["card_inner"], corner_radius=6)
-        self.thumb_label.pack(side="left", padx=(0, 10))
-
-        stats_text = ctk.CTkFrame(stats_inner, fg_color="transparent")
-        stats_text.pack(side="left", fill="both", expand=True)
-
-        self.frames_label = ctk.CTkLabel(stats_text, text=lang.t("frames_zero"),
-                                         font=("Arial", 11), text_color="gray",
-                                         anchor="w")
-        self.frames_label.pack(anchor="w")
-
-        self.size_label = ctk.CTkLabel(stats_text, text="—",
-                                       font=("Arial", 11), text_color=T["muted"],
-                                       anchor="w")
-        self.size_label.pack(anchor="w")
-
-        self.warn_label = ctk.CTkLabel(stats_text, text="",
-                                       font=("Arial", 11), text_color="orange",
-                                       anchor="w")
-        self.warn_label.pack(anchor="w")
-
         # Auto-fit window height to actual content
         self.after(30, self._fit_window_height)
 
     def _fit_window_height(self):
         self.update_idletasks()
         h = self.winfo_reqheight()
-        self.geometry(f"{APP_W}x{h}")
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        x = (sw - APP_W) // 2
+        y = (sh - h) // 2
+        self.geometry(f"{APP_W}x{h}+{x}+{y}")
         self.after(10, lambda: self.apply_round_region(APP_W, h))
+        self.after(20, lambda: self.attributes("-alpha", 1))
 
     # ------------------------------------------------------------------ #
     #  UI HELPERS                                                          #
@@ -1858,6 +1923,10 @@ class ArtLapseApp(ctk.CTk):
                                  text_color=T["accent"])
         self._project_btn.configure(fg_color=T["card"], hover_color=T["hover"],
                                     text_color=T["subtext"])
+        self._open_project_folder_btn.configure(
+            fg_color=T["card"], hover_color=T["accent_dim"],
+            text_color=T["accent"] if self._current_project.strip() else T["muted"],
+        )
         self.label_interval.configure(text_color=T["accent"])
         self.slider_interval.configure(button_color=T["accent"], progress_color=T["accent"])
         self._interval_marker.configure(bg=T["bg"])
@@ -2088,6 +2157,7 @@ class ArtLapseApp(ctk.CTk):
         self._current_project = name
         display = (name[:32] + "…") if len(name) > 32 else name
         self._project_btn.configure(text=f"  {display}", text_color="white")
+        self._open_project_folder_btn.configure(text_color=T["accent"])
         self._load_project_preview()
         self._update_status_guidance()
         self._refresh_start_btn()
@@ -2204,6 +2274,13 @@ class ArtLapseApp(ctk.CTk):
             self.folder_label.configure(text="  📂  " + config.get_short_path(self.base_path))
             # project picker refreshes dynamically from base_path
 
+    def _open_project_folder(self):
+        if not self._current_project.strip() or not self.base_path:
+            return
+        path = os.path.join(self.base_path, self._current_project.strip())
+        if os.path.isdir(path):
+            os.startfile(path)
+
     def open_output_folder(self):
         target = self.final_path if self.final_path and os.path.exists(self.final_path) else self.base_path
         if target and os.path.exists(target):
@@ -2269,6 +2346,7 @@ class ArtLapseApp(ctk.CTk):
                     self._project_btn.configure(
                         text=lang.t("project_placeholder_short"), text_color=T["subtext"]
                     )
+                    self._open_project_folder_btn.configure(text_color=T["muted"])
                 self.status_label.configure(text=lang.t("status_deleted", name=name), text_color="gray")
             except Exception as e:
                 self.status_label.configure(text=lang.t("status_delete_failed", err=e), text_color="red")

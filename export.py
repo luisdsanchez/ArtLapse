@@ -37,7 +37,18 @@ def run_export(
 
     name_part    = _safe(project_name)  if project_name  else "Project"
     quality_part = _safe(quality_label) if quality_label else "Export"
-    out_file = os.path.join(path, f"Timelapse_{name_part}_{quality_part}.mp4")
+    _base    = f"Timelapse_{name_part}_{quality_part}"
+    out_file = os.path.join(path, f"{_base}.mp4")
+    if os.path.exists(out_file):
+        import re as _re
+        existing = [
+            f for f in os.listdir(path)
+            if _re.fullmatch(rf"{_re.escape(_base)}_(\d+)\.mp4", f)
+        ]
+        next_n = max((int(_re.search(r"_(\d+)\.mp4$", f).group(1)) for f in existing), default=1) + 1
+        while os.path.exists(os.path.join(path, f"{_base}_{next_n}.mp4")):
+            next_n += 1
+        out_file = os.path.join(path, f"{_base}_{next_n}.mp4")
 
     total_frames = len(pngs)
 

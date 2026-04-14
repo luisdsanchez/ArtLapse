@@ -11,10 +11,10 @@ Usage:
 _STRINGS = {
     "en": {
         # ── Main section headers ──────────────────────────────────────────
-        "section_target":   "1 · Capture Target",
-        "section_folder":   "2 · Output Folder",
-        "section_project":  "3 · Project Name",
-        "section_interval": "4 · Capture Interval",
+        "section_target":   "Capture Target",
+        "section_folder":   "Output Folder",
+        "section_project":  "Project Name",
+        "section_interval": "Capture Interval",
 
         # ── Capture Quality ───────────────────────────────────────────────
         "capture_quality": "Capture Quality",
@@ -36,7 +36,7 @@ _STRINGS = {
         "smart_tooltip": "Skips saving a frame if the screen\nhasn't changed for 5 consecutive shots.",
 
         # ── Status / guidance ─────────────────────────────────────────────
-        "status_step1":     "\u25b2 Step 1 \u2014 pick a capture target to begin",
+        "status_step1":     "\u25b2 Pick a capture target to begin",
         "status_step3":     "\u25b2 Step 3 \u2014 name your project to continue",
         "status_ready":     "Ready \u2014 press START",
         "status_recording": "Recording \u2014 frame {n}",
@@ -144,10 +144,10 @@ _STRINGS = {
 
     "es": {
         # ── Encabezados de sección ────────────────────────────────────────
-        "section_target":   "1 · Destino de captura",
-        "section_folder":   "2 · Carpeta de salida",
-        "section_project":  "3 · Nombre del proyecto",
-        "section_interval": "4 · Intervalo de captura",
+        "section_target":   "Destino de captura",
+        "section_folder":   "Carpeta de salida",
+        "section_project":  "Nombre del proyecto",
+        "section_interval": "Intervalo de captura",
 
         # ── Calidad de captura ────────────────────────────────────────────
         "capture_quality": "Calidad de captura",
@@ -169,7 +169,7 @@ _STRINGS = {
         "smart_tooltip": "Omite guardar un fotograma si la pantalla\nno cambi\u00f3 en 5 capturas consecutivas.",
 
         # ── Estado / orientaci\u00f3n ────────────────────────────────────────────
-        "status_step1":     "\u25b2 Paso 1 \u2014 seleccion\u00e1 un destino de captura",
+        "status_step1":     "\u25b2 Seleccioná un destino de captura para comenzar",
         "status_step3":     "\u25b2 Paso 3 \u2014 nombr\u00e1 tu proyecto para continuar",
         "status_ready":     "Listo \u2014 presion\u00e1 INICIAR",
         "status_recording": "Grabando \u2014 fotograma {n}",

@@ -1,7 +1,7 @@
 import os
 import customtkinter as ctk
 
-APP_VERSION  = "1.1.0"  # TEMP: lowered to test auto-update — revert to 1.2.0 after test
+APP_VERSION  = "1.2.1"
 GITHUB_REPO  = "luisdsanchez/ArtLapse"
 
 CONFIG_FILE  = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "ArtLapse", "config.json")
