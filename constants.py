@@ -1,7 +1,7 @@
 import os
 import customtkinter as ctk
 
-APP_VERSION  = "1.1.0"
+APP_VERSION  = "1.1.0"  # TEMP: lowered to test auto-update — revert to 1.2.0 after test
 GITHUB_REPO  = "luisdsanchez/ArtLapse"
 
 CONFIG_FILE  = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "ArtLapse", "config.json")
@@ -26,6 +26,7 @@ THEMES = {
         "card_border":  "#2d3133",
         "tooltip_bg":   "#2a2d2f",
         "tooltip_fg":   "#cccccc",
+        "btn_text":     "#ffffff",
         "appearance":   "dark",
     },
     "light": {
@@ -44,6 +45,7 @@ THEMES = {
         "card_border":  "#C8C0B2",
         "tooltip_bg":   "#E8E0D0",
         "tooltip_fg":   "#1A2744",
+        "btn_text":     "#1A2744",
         "appearance":   "light",
     },
 }

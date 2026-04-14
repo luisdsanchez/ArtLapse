@@ -52,7 +52,7 @@ def _apply_dwm_round(hwnd, large: bool = True):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class UpdatePopup(ctk.CTkToplevel):
-    _W, _H = 280, 152
+    _W, _H = 280, 168
 
     def __init__(self, parent, ver: str, download_url: str):
         super().__init__(parent)
@@ -111,7 +111,7 @@ class UpdatePopup(ctk.CTkToplevel):
 
         # ── body ─────────────────────────────────────────────────────────
         body = ctk.CTkFrame(self, fg_color="transparent")
-        body.pack(fill="both", expand=True, padx=16, pady=(8, 14))
+        body.pack(fill="both", expand=True, padx=16, pady=(8, 16))
 
         ctk.CTkLabel(
             body,
@@ -138,7 +138,7 @@ class UpdatePopup(ctk.CTkToplevel):
             body, text=lang.t("update_now"),
             width=160, height=30,
             fg_color=T["accent"], hover_color=T["accent_dim"],
-            font=("Arial", 11, "bold"), text_color="#ffffff",
+            font=("Arial", 11, "bold"), text_color=T["btn_text"],
             corner_radius=6, command=self._do_update,
         )
         self._update_btn.pack()
@@ -157,6 +157,8 @@ class UpdatePopup(ctk.CTkToplevel):
                 updater.download_and_swap(self._download_url, on_progress=on_progress)
             except Exception:
                 self.after(0, self._show_error)
+            else:
+                self.after(0, self._show_relaunch)
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -165,6 +167,13 @@ class UpdatePopup(ctk.CTkToplevel):
             return
         self._progress_bar.set(pct / 100)
         self._update_btn.configure(text=lang.t("update_downloading", pct=pct))
+
+    def _show_relaunch(self):
+        if not self.winfo_exists():
+            return
+        self._progress_bar.pack_forget()
+        self._msg_lbl.configure(text=lang.t("update_relaunch"), text_color=T["accent"])
+        self._update_btn.configure(state="disabled", text="✓")
 
     def _show_error(self):
         if not self.winfo_exists():

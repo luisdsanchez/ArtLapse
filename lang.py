@@ -139,6 +139,7 @@ _STRINGS = {
         "update_later":       "Later",
         "update_downloading": "Downloading… {pct}%",
         "update_error":       "Download failed — try again later",
+        "update_relaunch":    "Updated! Relaunch to apply.",
     },
 
     "es": {
@@ -271,6 +272,7 @@ _STRINGS = {
         "update_later":       "Después",
         "update_downloading": "Descargando… {pct}%",
         "update_error":       "Error de descarga — inténtalo más tarde",
+        "update_relaunch":    "¡Actualizado! Reinicia para aplicar.",
     },
 }
 

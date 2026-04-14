@@ -102,13 +102,35 @@ def download_and_swap(download_url: str, on_progress=None):
     # 2. Write a .bat that waits for us to exit, swaps files, then relaunches
     bat_fd, bat_path = tempfile.mkstemp(suffix=".bat", prefix="ArtLapse_swap_")
     os.close(bat_fd)
+    current_pid = os.getpid()
+    exe_dir = os.path.dirname(os.path.abspath(current_exe))
+    # Derive the new filename from the asset URL (e.g. ArtLapsev1.2.exe)
+    # so the renamed file matches the release name.
+    new_exe_name = download_url.rstrip("/").split("/")[-1]
+    if not new_exe_name.lower().endswith(".exe"):
+        new_exe_name = os.path.basename(current_exe)
+    new_exe = os.path.join(exe_dir, new_exe_name)
+    # PyInstaller extracts to this folder; we tell the bat to delete it after
+    # the process exits so the new exe doesn't try to reuse a stale extraction.
+    mei_dir = getattr(sys, "_MEIPASS", None)
     with open(bat_path, "w") as f:
+        mei_cleanup = (
+            f'if exist "{mei_dir}" (rmdir /s /q "{mei_dir}")\n'
+            if mei_dir else ""
+        )
         f.write(
             "@echo off\n"
-            f'timeout /t 2 /nobreak >nul\n'
-            f'move /y "{tmp_path}" "{current_exe}"\n'
-            f'start "" "{current_exe}"\n'
-            f'del "%~f0"\n'
+            # Wait until the old process is fully gone before swapping
+            f':wait\n'
+            f'tasklist /fi "PID eq {current_pid}" 2>nul | find /i "{current_pid}" >nul\n'
+            f'if not errorlevel 1 (timeout /t 1 /nobreak >nul & goto wait)\n'
+            + mei_cleanup +
+            f'move /y "{tmp_path}" "{new_exe}"\n'
+            f'powershell -Command "Unblock-File -LiteralPath \'{new_exe}\'" >nul 2>&1\n'
+            # Delete the old exe if the name changed
+            + (f'if exist "{current_exe}" (del /f /q "{current_exe}")\n'
+               if new_exe.lower() != current_exe.lower() else "")
+            + f'del "%~f0"\n'
         )
 
     # 3. Launch the bat (hidden) and exit
@@ -116,7 +138,13 @@ def download_and_swap(download_url: str, on_progress=None):
         ["cmd", "/c", bat_path],
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
-    sys.exit(0)
+    # Signal the main process to exit after a short delay so the UI can show
+    # the "relaunch" message before the window closes.
+    import threading as _t
+    def _delayed_exit():
+        import time; time.sleep(2.5)
+        os._exit(0)
+    _t.Thread(target=_delayed_exit, daemon=True).start()
 
 
 def check_in_background(callback):
