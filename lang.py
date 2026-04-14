@@ -130,6 +130,15 @@ _STRINGS = {
         "dlg_del_body":   '"{name}" and all its files\nwill be permanently deleted.',
         "btn_cancel":     "Cancel",
         "btn_delete":     "\U0001f5d1  Delete",
+
+        # ── Update popup ──────────────────────────────────────────────────
+        "update_title":       "Update Available",
+        "update_current_ver": "Current version: v{ver}",
+        "update_available":   "v{ver} is ready to install",
+        "update_now":         "Update now",
+        "update_later":       "Later",
+        "update_downloading": "Downloading… {pct}%",
+        "update_error":       "Download failed — try again later",
     },
 
     "es": {
@@ -253,6 +262,15 @@ _STRINGS = {
         "dlg_del_body":   '"{name}" y todos sus archivos\nser\u00e1n eliminados permanentemente.',
         "btn_cancel":     "Cancelar",
         "btn_delete":     "\U0001f5d1  Eliminar",
+
+        # ── Popup de actualización ────────────────────────────────────────
+        "update_title":       "Actualización disponible",
+        "update_current_ver": "Versión actual: v{ver}",
+        "update_available":   "v{ver} está lista para instalar",
+        "update_now":         "Actualizar",
+        "update_later":       "Después",
+        "update_downloading": "Descargando… {pct}%",
+        "update_error":       "Error de descarga — inténtalo más tarde",
     },
 }
 

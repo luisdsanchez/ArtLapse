@@ -1,6 +1,9 @@
 import os
 import customtkinter as ctk
 
+APP_VERSION  = "1.1.0"
+GITHUB_REPO  = "luisdsanchez/ArtLapse"
+
 CONFIG_FILE  = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "ArtLapse", "config.json")
 
 APP_W, APP_H = 400, 780

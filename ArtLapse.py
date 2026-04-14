@@ -15,6 +15,7 @@ import capture
 import export
 import lang
 import constants
+import updater
 from constants import T, set_theme as _set_theme, APP_W, APP_H
 
 
@@ -44,6 +45,133 @@ def _apply_dwm_round(hwnd, large: bool = True):
         ctypes.windll.user32.SetWindowRgn(hwnd, None, True)
     except Exception:
         pass
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  UPDATE POPUP
+# ══════════════════════════════════════════════════════════════════════════════
+
+class UpdatePopup(ctk.CTkToplevel):
+    _W, _H = 280, 152
+
+    def __init__(self, parent, ver: str, download_url: str):
+        super().__init__(parent)
+        self.overrideredirect(True)
+        self.configure(fg_color=T["popup_bg"])
+        self.wm_attributes("-topmost", True)
+
+        self._ver          = ver
+        self._download_url = download_url
+        self._progress_bar = None
+        self._msg_lbl      = None
+        self._update_btn   = None
+        self._drag_ox = self._drag_oy = 0
+
+        parent.update_idletasks()
+        px = parent.winfo_rootx() + (parent.winfo_width()  - self._W) // 2
+        py = parent.winfo_rooty() + (parent.winfo_height() - self._H) // 2
+        self.geometry(f"{self._W}x{self._H}+{px}+{py}")
+
+        self._build_ui()
+        self.after(20, self._apply_round)
+
+    def _apply_round(self):
+        hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+        _apply_dwm_round(hwnd, large=False)
+
+    def _drag_start(self, e):
+        self._drag_ox = e.x_root - self.winfo_x()
+        self._drag_oy = e.y_root - self.winfo_y()
+
+    def _drag_move(self, e):
+        self.geometry(f"+{e.x_root - self._drag_ox}+{e.y_root - self._drag_oy}")
+
+    def _build_ui(self):
+        # ── title bar ────────────────────────────────────────────────────
+        tbar = ctk.CTkFrame(self, fg_color=T["popup_bg"], height=36, corner_radius=0)
+        tbar.pack(fill="x")
+        tbar.pack_propagate(False)
+        tbar.bind("<Button-1>",  self._drag_start)
+        tbar.bind("<B1-Motion>", self._drag_move)
+
+        title = ctk.CTkLabel(
+            tbar, text=lang.t("update_title"),
+            font=("Arial", 10, "bold"), text_color=T["subtext"],
+        )
+        title.place(relx=0.5, rely=0.5, anchor="center")
+        title.bind("<Button-1>",  self._drag_start)
+        title.bind("<B1-Motion>", self._drag_move)
+
+        ctk.CTkButton(
+            tbar, text="✕", width=28, height=28,
+            fg_color="transparent", hover_color="#c42b1c",
+            font=("Arial", 12, "bold"), text_color=T["subtext"],
+            corner_radius=4, command=self.destroy,
+        ).place(relx=1.0, rely=0.5, anchor="e", x=-4)
+
+        # ── body ─────────────────────────────────────────────────────────
+        body = ctk.CTkFrame(self, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=16, pady=(8, 14))
+
+        ctk.CTkLabel(
+            body,
+            text=lang.t("update_current_ver", ver=constants.APP_VERSION),
+            font=("Arial", 10), text_color=T["muted"],
+        ).pack(pady=(0, 2))
+
+        self._msg_lbl = ctk.CTkLabel(
+            body,
+            text=lang.t("update_available", ver=self._ver),
+            font=("Arial", 12, "bold"), text_color=T["primary"],
+        )
+        self._msg_lbl.pack(pady=(0, 10))
+
+        self._progress_bar = ctk.CTkProgressBar(
+            body, width=220, height=10,
+            progress_color=T["accent"], fg_color=T["card"],
+        )
+        self._progress_bar.set(0)
+        self._progress_bar.pack(pady=(0, 10))
+        self._progress_bar.pack_forget()   # hidden until download starts
+
+        self._update_btn = ctk.CTkButton(
+            body, text=lang.t("update_now"),
+            width=160, height=30,
+            fg_color=T["accent"], hover_color=T["accent_dim"],
+            font=("Arial", 11, "bold"), text_color="#ffffff",
+            corner_radius=6, command=self._do_update,
+        )
+        self._update_btn.pack()
+
+    def _do_update(self):
+        self._update_btn.configure(state="disabled", text=lang.t("update_downloading", pct=0))
+        self._progress_bar.set(0)
+        self._progress_bar.pack(pady=(0, 10), before=self._update_btn)
+
+        def on_progress(fraction):
+            pct = int(fraction * 100)
+            self.after(0, lambda p=pct: self._on_progress(p))
+
+        def run():
+            try:
+                updater.download_and_swap(self._download_url, on_progress=on_progress)
+            except Exception:
+                self.after(0, self._show_error)
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _on_progress(self, pct: int):
+        if not self.winfo_exists():
+            return
+        self._progress_bar.set(pct / 100)
+        self._update_btn.configure(text=lang.t("update_downloading", pct=pct))
+
+    def _show_error(self):
+        if not self.winfo_exists():
+            return
+        self._progress_bar.pack_forget()
+        self._msg_lbl.configure(text=lang.t("update_error"), text_color="#e85c25")
+        self._update_btn.configure(state="normal", text=lang.t("update_now"))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1347,8 +1475,31 @@ class ArtLapseApp(ctk.CTk):
         self._tooltip_win          = None
         self._active_tooltips      = set()   # all open tooltip toplevels
         self._section_labels       = []      # tracked for _apply_theme()
+        self._update_popup         = None    # UpdatePopup instance
+        self._update_url           = None
 
         self._build_ui()
+        self.after(2000, self._start_update_check)
+
+    # ------------------------------------------------------------------ #
+    #  AUTO-UPDATE                                                         #
+    # ------------------------------------------------------------------ #
+    def _start_update_check(self):
+        updater.check_in_background(
+            lambda result: self.after(0, lambda r=result: self._on_update_result(r))
+        )
+
+    def _on_update_result(self, result):
+        if result is None:
+            return
+        latest_ver, download_url = result
+        self._update_url = download_url
+        self._show_update_popup(latest_ver)
+
+    def _show_update_popup(self, ver: str):
+        if self._update_popup and self._update_popup.winfo_exists():
+            return
+        self._update_popup = UpdatePopup(self, ver, self._update_url)
 
     # ------------------------------------------------------------------ #
     #  ROUNDED REGION                                                      #
