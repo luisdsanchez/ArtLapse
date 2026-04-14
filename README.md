@@ -2,6 +2,8 @@
 
 A lightweight Windows desktop app for recording timelapses of any open window on your screen. Capture your art process, coding sessions, or any creative workflow — then export it as an MP4 video with one click.
 
+<img width="400" height="642" alt="image" src="https://github.com/user-attachments/assets/15bc47f3-4f7b-4070-a717-2d4b13313ac4" />
+
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
