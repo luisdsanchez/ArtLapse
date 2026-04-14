@@ -218,7 +218,6 @@ class WindowPickerPopup(ctk.CTkToplevel):
 
         self._build_ui()
         self.after(20, self._apply_round)
-        self.grab_set()
 
         threading.Thread(target=self._load_data, daemon=True).start()
 
@@ -509,9 +508,9 @@ class WindowPickerPopup(ctk.CTkToplevel):
             _leave_id[0] = card.after(40, _do)
 
         def _bind_all(widget):
-            widget.bind("<Button-1>", on_click)
-            widget.bind("<Enter>",    on_enter)
-            widget.bind("<Leave>",    on_leave)
+            widget.bind("<ButtonRelease-1>", on_click)
+            widget.bind("<Enter>",           on_enter)
+            widget.bind("<Leave>",           on_leave)
             for child in widget.winfo_children():
                 _bind_all(child)
 
@@ -1446,8 +1445,8 @@ class SettingsPopup(ctk.CTkToplevel):
         self.configure(fg_color=T["popup_bg"])
         self._tbar.configure(fg_color=T["popup_bg"])
         for lbl in (self._lbl_language, self._lbl_cq, self._lbl_smart,
-                    self._lbl_interval, self._lbl_auto, self._lbl_dur,
-                    self._lbl_launch, self._lbl_theme):
+                    self._lbl_interval, self._lbl_auto,
+                    self._lbl_dur, self._lbl_launch, self._lbl_theme):
             lbl.configure(text_color=T["label"])
         self._interval_val_lbl.configure(text_color=T["accent"])
         self._dur_val_lbl.configure(text_color=T["accent"])
@@ -1536,9 +1535,16 @@ class ArtLapseApp(ctk.CTk):
         self._section_labels       = []      # tracked for _apply_theme()
         self._update_popup         = None    # UpdatePopup instance
         self._update_url           = None
-
         self._build_ui()
         self.after(2000, self._start_update_check)
+
+    @staticmethod
+    def _count_images(path: str) -> int:
+        return len([f for f in os.listdir(path) if f.lower().endswith((".png", ".jpg", ".jpeg"))])
+
+    def _auto_project_name(self) -> str:
+        import datetime
+        return datetime.date.today().strftime("Recording_%Y-%m-%d")
 
     # ------------------------------------------------------------------ #
     #  AUTO-UPDATE                                                         #
@@ -2036,31 +2042,27 @@ class ArtLapseApp(ctk.CTk):
         widget.bind("<Enter>", _show, add="+")
 
     def _update_status_guidance(self):
-        """Update the status label and step colours to guide the user."""
         if self.is_recording:
             return
         if self._capture_target is None:
             self.status_label.configure(
-                text=lang.t("status_step1"),
-                text_color=T["subtext"])
+                text=lang.t("status_step1"), text_color=T["subtext"])
             self._step_target_lbl.configure(text_color=T["accent"])
             self._step_project_lbl.configure(text_color=T["muted"])
         elif not self._current_project.strip():
             self.status_label.configure(
-                text=lang.t("status_step3"),
-                text_color=T["subtext"])
+                text=lang.t("status_step3"), text_color=T["subtext"])
             self._step_target_lbl.configure(text_color="#55aa55")
-            self._step_project_lbl.configure(text_color=T["accent"])
+            self._step_project_lbl.configure(text_color=T["muted"])
         else:
             self.status_label.configure(text=lang.t("status_ready"), text_color="gray")
             self._step_target_lbl.configure(text_color="#55aa55")
             self._step_project_lbl.configure(text_color="#55aa55")
 
     def _refresh_start_btn(self):
-        """Enable or disable the START button based on required fields."""
         if self.is_recording:
             return
-        ready = self._capture_target is not None and bool(self._current_project.strip())
+        ready = self._capture_target is not None and bool(self.base_path)
         if ready:
             self.start_btn.configure(
                 state="normal", fg_color=T["accent"], hover_color=T["accent_dim"],
@@ -2405,6 +2407,9 @@ class ArtLapseApp(ctk.CTk):
                 self.status_label.configure(text=lang.t("status_no_target"), text_color="red")
                 return
 
+            if not self._current_project.strip():
+                self._on_project_selected(self._auto_project_name())
+
             path = self._resolve_project_path()
             if not path:
                 self.status_label.configure(text=lang.t("status_no_project_rec"), text_color="red")
@@ -2412,10 +2417,9 @@ class ArtLapseApp(ctk.CTk):
 
             self.final_path = path
             os.makedirs(self.final_path, exist_ok=True)
-            existing = [f for f in os.listdir(self.final_path)
-                        if f.lower().endswith((".png", ".jpg", ".jpeg"))]
-            self.count = len(existing) + 1
-            self.frames_label.configure(text=lang.t("frames_n", n=len(existing)))
+            existing_count = self._count_images(self.final_path)
+            self.count = existing_count + 1
+            self.frames_label.configure(text=lang.t("frames_n", n=existing_count))
 
             self.is_recording = True
             self._identical_streak = 0; self._prev_thumb_bytes = None

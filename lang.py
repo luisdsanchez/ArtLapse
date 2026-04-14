@@ -36,9 +36,9 @@ _STRINGS = {
         "smart_tooltip": "Skips saving a frame if the screen\nhasn't changed for 5 consecutive shots.",
 
         # ── Status / guidance ─────────────────────────────────────────────
-        "status_step1":     "\u25b2 Pick a capture target to begin",
-        "status_step3":     "\u25b2 Step 3 \u2014 name your project to continue",
-        "status_ready":     "Ready \u2014 press START",
+        "status_step1":       "\u25b2 Pick a capture target to begin",
+        "status_step3":       "\u25b2 Step 3 \u2014 name your project to continue",
+        "status_ready":       "Ready \u2014 press START",
         "status_recording": "Recording \u2014 frame {n}",
         "status_smart_pause": "Smart pause \u2014 frame {n}",
         "status_exporting": "Exporting\u2026",
@@ -169,9 +169,9 @@ _STRINGS = {
         "smart_tooltip": "Omite guardar un fotograma si la pantalla\nno cambi\u00f3 en 5 capturas consecutivas.",
 
         # ── Estado / orientaci\u00f3n ────────────────────────────────────────────
-        "status_step1":     "\u25b2 Seleccioná un destino de captura para comenzar",
-        "status_step3":     "\u25b2 Paso 3 \u2014 nombr\u00e1 tu proyecto para continuar",
-        "status_ready":     "Listo \u2014 presion\u00e1 INICIAR",
+        "status_step1":       "\u25b2 Seleccioná un destino de captura para comenzar",
+        "status_step3":       "\u25b2 Paso 3 \u2014 nombr\u00e1 tu proyecto para continuar",
+        "status_ready":       "Listo \u2014 presion\u00e1 INICIAR",
         "status_recording": "Grabando \u2014 fotograma {n}",
         "status_smart_pause": "Pausa inteligente \u2014 fotograma {n}",
         "status_exporting": "Exportando\u2026",
