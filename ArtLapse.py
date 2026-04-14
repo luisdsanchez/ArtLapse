@@ -1023,6 +1023,7 @@ class SettingsPopup(ctk.CTkToplevel):
 
     def _build_ui(self):
         tbar = ctk.CTkFrame(self, fg_color=T["popup_bg"], height=42, corner_radius=0)
+        self._tbar = tbar
         tbar.pack(fill="x")
         tbar.pack_propagate(False)
         tbar.bind("<Button-1>",  self._drag_start)
@@ -1097,9 +1098,10 @@ class SettingsPopup(ctk.CTkToplevel):
         self._lbl_smart = self._lbl(row, "settings_smart_capture")
         self._lbl_smart.pack(side="left")
         self._smart_var = ctk.BooleanVar(value=config.load_smart_capture())
-        ctk.CTkSwitch(row, text="", variable=self._smart_var,
+        self._smart_switch = ctk.CTkSwitch(row, text="", variable=self._smart_var,
                       width=40, button_color=T["accent"], progress_color=T["accent_dim"],
-                      command=self._select_smart).pack(side="right")
+                      command=self._select_smart)
+        self._smart_switch.pack(side="right")
         self._bind_tip(self._lbl_smart, "tip_settings_smart")
 
         # ── Auto-export ───────────────────────────────────────────────────
@@ -1107,9 +1109,10 @@ class SettingsPopup(ctk.CTkToplevel):
         self._lbl_auto = self._lbl(row, "settings_auto_export")
         self._lbl_auto.pack(side="left")
         self._auto_var = ctk.BooleanVar(value=config.load_auto_export())
-        ctk.CTkSwitch(row, text="", variable=self._auto_var,
+        self._auto_switch = ctk.CTkSwitch(row, text="", variable=self._auto_var,
                       width=40, button_color=T["accent"], progress_color=T["accent_dim"],
-                      command=self._select_auto).pack(side="right")
+                      command=self._select_auto)
+        self._auto_switch.pack(side="right")
         self._bind_tip(self._lbl_auto, "tip_settings_auto_export")
 
         # ── Default Interval ──────────────────────────────────────────────
@@ -1247,9 +1250,36 @@ class SettingsPopup(ctk.CTkToplevel):
     def _select_theme(self, name: str):
         config.save_theme(name)
         _set_theme(name)
+        self._apply_popup_theme()
         if self._on_theme_change:
             self._on_theme_change()
-        self.destroy()
+
+    def _apply_popup_theme(self):
+        """Re-color all popup widgets to match the current theme T."""
+        self.configure(fg_color=T["popup_bg"])
+        self._tbar.configure(fg_color=T["popup_bg"])
+        for lbl in (self._lbl_language, self._lbl_cq, self._lbl_smart,
+                    self._lbl_interval, self._lbl_auto, self._lbl_dur,
+                    self._lbl_launch, self._lbl_theme):
+            lbl.configure(text_color=T["label"])
+        self._interval_val_lbl.configure(text_color=T["accent"])
+        self._dur_val_lbl.configure(text_color=T["accent"])
+        self._interval_slider.configure(button_color=T["accent"], progress_color=T["accent"])
+        self._dur_slider.configure(button_color=T["accent"], progress_color=T["accent"])
+        self._smart_switch.configure(button_color=T["accent"], progress_color=T["accent_dim"])
+        self._auto_switch.configure(button_color=T["accent"], progress_color=T["accent_dim"])
+        cur_lang = lang.get_lang()
+        self._refresh_tri(self._lang_btns, cur_lang)
+        self._refresh_tri(self._cq_btns, config.load_capture_quality())
+        self._refresh_tri(self._launch_btns, config.load_launch_behavior())
+        cur_theme = constants.CURRENT_THEME_NAME
+        for tname, btn in self._theme_btns.items():
+            active = tname == cur_theme
+            btn.configure(
+                fg_color=T["accent"] if active else T["card"],
+                hover_color=T["accent_dim"] if active else T["hover"],
+                text_color="white" if active else T["label"],
+            )
 
     @staticmethod
     def _make_theme_ball(left_hex: str, right_hex: str, size: int = 16):
@@ -1336,9 +1366,12 @@ class ArtLapseApp(ctk.CTk):
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
 
-        _logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "ArtLapse_title.png")
-        _logo_pil  = Image.open(_logo_path)
-        _logo_img  = ctk.CTkImage(light_image=_logo_pil, dark_image=_logo_pil, size=(131, 34))
+        _assets = os.path.dirname(os.path.abspath(__file__))
+        _logo_dark_pil  = Image.open(os.path.join(_assets, "assets", "ArtLapse_title.png"))
+        _logo_light_pil = Image.open(os.path.join(_assets, "assets", "ArtLapse_title_light.png"))
+        self._logo_dark_pil  = _logo_dark_pil
+        self._logo_light_pil = _logo_light_pil
+        _logo_img  = ctk.CTkImage(light_image=_logo_light_pil, dark_image=_logo_dark_pil, size=(131, 34))
         self._title_lbl = ctk.CTkLabel(hdr, text="", image=_logo_img)
         self._title_lbl.place(relx=0.5, rely=0.55, anchor="center")
         self._title_lbl.bind("<Button-1>",  self._click_window)
@@ -1642,6 +1675,12 @@ class ArtLapseApp(ctk.CTk):
     def _apply_theme(self):
         """Re-color all tracked widgets to match the current theme T."""
         self.configure(fg_color=T["bg"])
+
+        _is_light = constants.CURRENT_THEME_NAME == "light"
+        _logo_pil = self._logo_light_pil if _is_light else self._logo_dark_pil
+        self._title_lbl.configure(
+            image=ctk.CTkImage(light_image=_logo_pil, dark_image=_logo_pil, size=(131, 34))
+        )
 
         self._cog_btn.configure(hover_color=T["bg"],
                                 image=self._make_cog_image(size=20, color=T["muted"]))

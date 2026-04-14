@@ -52,11 +52,7 @@ CURRENT_THEME_NAME = "dark"
 
 
 def set_theme(name: str):
-    """Update T in-place and switch CTk appearance mode."""
+    """Update T in-place. CTk appearance mode is set once at startup only."""
     global CURRENT_THEME_NAME
     CURRENT_THEME_NAME = name
     T.update(THEMES[name])
-    try:
-        ctk.set_appearance_mode(T["appearance"])
-    except Exception:
-        pass
