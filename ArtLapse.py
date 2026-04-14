@@ -7,7 +7,7 @@ import sys
 import threading
 import tkinter as tk
 from tkinter import filedialog
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageTk
 import pystray
 
 import config
@@ -19,37 +19,31 @@ from constants import T, set_theme as _set_theme, APP_W, APP_H
 
 
 def _make_app_icon(size=64) -> Image.Image:
-    """Create an orange rounded-rectangle icon with a white 'A' centered."""
-    from PIL import ImageFont
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    d   = ImageDraw.Draw(img)
-    r   = size // 6
-    d.rounded_rectangle([0, 0, size - 1, size - 1], radius=r, fill=(232, 92, 37, 255))
-
-    # Draw white "A" centered
-    font_size = int(size * 0.55)
-    font = None
-    for font_path in [
-        "C:/Windows/Fonts/arialbd.ttf",
-        "C:/Windows/Fonts/arial.ttf",
-        "C:/Windows/Fonts/calibrib.ttf",
-    ]:
-        try:
-            font = ImageFont.truetype(font_path, font_size)
-            break
-        except OSError:
-            continue
-    if font is None:
-        font = ImageFont.load_default()
-
-    bbox = d.textbbox((0, 0), "A", font=font)
-    tx = (size - (bbox[2] - bbox[0])) // 2 - bbox[0]
-    ty = (size - (bbox[3] - bbox[1])) // 2 - bbox[1]
-    d.text((tx, ty), "A", fill=(255, 255, 255, 255), font=font)
-    return img
+    """Load the app icon from the bundled PNG asset."""
+    _base = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
+    path  = os.path.join(_base, "assets", "ArtLapse_icon.png")
+    return Image.open(path).convert("RGBA").resize((size, size), Image.LANCZOS)
 
 # Apply saved theme before any windows are created
 _set_theme(config.load_theme())
+
+
+def _apply_dwm_round(hwnd, large: bool = True):
+    """Use DWM compositor (Windows 11+) for anti-aliased rounded corners.
+    Falls back silently on older Windows."""
+    try:
+        DWMWA_WINDOW_CORNER_PREFERENCE = 33
+        DWMWCRP_ROUND       = ctypes.c_int(2)   # large radius (~8px)
+        DWMWCRP_ROUNDSMALL  = ctypes.c_int(3)   # small radius (~4px)
+        value = DWMWCRP_ROUND if large else DWMWCRP_ROUNDSMALL
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(
+            hwnd, DWMWA_WINDOW_CORNER_PREFERENCE,
+            ctypes.byref(value), ctypes.sizeof(value),
+        )
+        # Clear any hard clip-region so DWM owns the shape entirely
+        ctypes.windll.user32.SetWindowRgn(hwnd, None, True)
+    except Exception:
+        pass
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -80,8 +74,9 @@ class WindowPickerPopup(ctk.CTkToplevel):
         self._drag_oy    = 0
 
         # Center on parent
-        px = parent.winfo_x() + (parent.winfo_width()  - self._POPUP_W) // 2
-        py = parent.winfo_y() + max(0, (parent.winfo_height() - self._POPUP_H) // 2)
+        parent.update_idletasks()
+        px = parent.winfo_rootx() + (parent.winfo_width()  - self._POPUP_W) // 2
+        py = parent.winfo_rooty() + max(0, (parent.winfo_height() - self._POPUP_H) // 2)
         self.geometry(f"{self._POPUP_W}x{self._POPUP_H}+{px}+{py}")
 
         self._build_ui()
@@ -92,9 +87,7 @@ class WindowPickerPopup(ctk.CTkToplevel):
 
     def _apply_round(self):
         hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
-        rgn  = ctypes.windll.gdi32.CreateRoundRectRgn(
-            0, 0, self._POPUP_W, self._POPUP_H, 14, 14)
-        ctypes.windll.user32.SetWindowRgn(hwnd, rgn, True)
+        _apply_dwm_round(hwnd, large=False)
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -379,8 +372,9 @@ class ProjectPickerPopup(ctk.CTkToplevel):
         self._drag_ox   = 0
         self._drag_oy   = 0
 
-        px = parent.winfo_x() + (parent.winfo_width()  - self._POPUP_W) // 2
-        py = parent.winfo_y() + max(0, (parent.winfo_height() - self._POPUP_H) // 2)
+        parent.update_idletasks()
+        px = parent.winfo_rootx() + (parent.winfo_width()  - self._POPUP_W) // 2
+        py = parent.winfo_rooty() + max(0, (parent.winfo_height() - self._POPUP_H) // 2)
         self.geometry(f"{self._POPUP_W}x{self._POPUP_H}+{px}+{py}")
 
         self._build_ui()
@@ -390,9 +384,7 @@ class ProjectPickerPopup(ctk.CTkToplevel):
 
     def _apply_round(self):
         hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
-        rgn  = ctypes.windll.gdi32.CreateRoundRectRgn(
-            0, 0, self._POPUP_W, self._POPUP_H, 14, 14)
-        ctypes.windll.user32.SetWindowRgn(hwnd, rgn, True)
+        _apply_dwm_round(hwnd, large=False)
 
     def _build_ui(self):
         # Title bar
@@ -652,14 +644,8 @@ class ExportPopup(ctk.CTkToplevel):
         self.bind("<Escape>", lambda _: self.destroy())
 
     def _apply_round_region(self):
-        try:
-            import ctypes
-            hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
-            rgn = ctypes.windll.gdi32.CreateRoundRectRgn(
-                0, 0, self._POPUP_W, self._POPUP_H, 14, 14)
-            ctypes.windll.user32.SetWindowRgn(hwnd, rgn, True)
-        except Exception:
-            pass
+        hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+        _apply_dwm_round(hwnd, large=False)
 
     def _drag_start(self, event):
         self._drag_ox = event.x_root - self.winfo_x()
@@ -688,7 +674,8 @@ class ExportPopup(ctk.CTkToplevel):
                       command=self.destroy
                       ).place(relx=1.0, rely=0.5, anchor="e", x=-6)
 
-        body = ctk.CTkFrame(self, fg_color="transparent")
+        self._body = ctk.CTkFrame(self, fg_color="transparent")
+        body = self._body
         body.pack(fill="both", expand=True, padx=14, pady=10)
 
         # Duration
@@ -707,7 +694,8 @@ class ExportPopup(ctk.CTkToplevel):
         self.duration_slider = ctk.CTkSlider(
             body, from_=0, to=len(self._DUR_SNAPS) - 1,
             number_of_steps=len(self._DUR_SNAPS) - 1,
-            button_color=T["accent"], progress_color=T["accent"],
+            button_color=T["accent"], button_hover_color=T["primary"],
+            progress_color=T["accent"],
             command=self._on_duration_slide)
         self.duration_slider.set(init_dur_idx)
         self.duration_slider.pack(fill="x", pady=(2, 0))
@@ -745,7 +733,8 @@ class ExportPopup(ctk.CTkToplevel):
 
         self.quality_slider = ctk.CTkSlider(
             body, from_=0, to=4, number_of_steps=4,
-            button_color=T["accent"], progress_color=T["accent"],
+            button_color=T["accent"], button_hover_color=T["primary"],
+            progress_color=T["accent"],
             command=self._update_quality_label)
         self.quality_slider.set(init_qual_idx)
         self.quality_slider.pack(fill="x", pady=(2, 0))
@@ -834,13 +823,83 @@ class ExportPopup(ctk.CTkToplevel):
     # ── export ────────────────────────────────────────────────────────────────
 
     def _do_export(self):
-        self._export_btn.configure(state="disabled")
+        self._show_progress_view()
         self._on_export(
             duration_secs=self.get_duration_seconds(),
             crf_preset=self.get_crf_and_preset(),
             quality_label=self.get_quality_label(),
-            on_done_cb=lambda: self.after(0, lambda: self._export_btn.configure(state="normal")),
+            on_progress_cb=self._on_progress,
+            on_success_cb=self._show_success_view,
+            on_error_cb=self._show_error_view,
         )
+
+    def _show_progress_view(self):
+        self._body.destroy()
+        self._body = ctk.CTkFrame(self, fg_color="transparent")
+        self._body.pack(fill="both", expand=True, padx=14, pady=10)
+
+        ctk.CTkLabel(self._body, text=lang.t("status_exporting"),
+                     font=("Arial", 13, "bold")).pack(pady=(10, 6))
+
+        self._progress_bar = ctk.CTkProgressBar(
+            self._body, width=240, height=14,
+            progress_color=T["accent"], fg_color=T.get("border", "#333333"))
+        self._progress_bar.set(0)
+        self._progress_bar.pack(pady=(0, 6))
+
+        self._progress_lbl = ctk.CTkLabel(
+            self._body, text="0%", font=("Arial", 11), text_color="gray")
+        self._progress_lbl.pack()
+
+    def _on_progress(self, fraction):
+        if hasattr(self, "_progress_bar") and self._progress_bar.winfo_exists():
+            self._progress_bar.set(fraction)
+        if hasattr(self, "_progress_lbl") and self._progress_lbl.winfo_exists():
+            self._progress_lbl.configure(text=f"{int(fraction * 100)}%")
+
+    def _show_success_view(self, out_path):
+        self._body.destroy()
+        self._body = ctk.CTkFrame(self, fg_color="transparent")
+        self._body.pack(fill="both", expand=True, padx=14, pady=10)
+
+        ctk.CTkLabel(self._body, text="✓", font=("Arial", 32, "bold"),
+                     text_color=T["accent"]).pack(pady=(12, 4))
+        ctk.CTkLabel(self._body, text=lang.t("export_success"),
+                     font=("Arial", 13, "bold")).pack(pady=(0, 12))
+
+        def _open_folder():
+            import subprocess as sp
+            sp.Popen(["explorer", os.path.normpath(os.path.dirname(out_path))])
+
+        ctk.CTkButton(
+            self._body, text=lang.t("btn_open_folder"),
+            fg_color=T["accent"], hover_color=T["accent_dim"],
+            font=("Arial", 12, "bold"), height=34,
+            command=_open_folder,
+        ).pack(fill="x", pady=(0, 4))
+
+        ctk.CTkButton(
+            self._body, text=lang.t("btn_close"),
+            fg_color="transparent", hover_color=T.get("border", "#333333"),
+            font=("Arial", 11), height=28,
+            command=self.destroy,
+        ).pack(fill="x")
+
+    def _show_error_view(self, msg):
+        self._body.destroy()
+        self._body = ctk.CTkFrame(self, fg_color="transparent")
+        self._body.pack(fill="both", expand=True, padx=14, pady=10)
+
+        ctk.CTkLabel(self._body, text="✕", font=("Arial", 28, "bold"),
+                     text_color="red").pack(pady=(12, 4))
+        ctk.CTkLabel(self._body, text=msg, font=("Arial", 11),
+                     text_color="red", wraplength=240).pack(pady=(0, 12))
+        ctk.CTkButton(
+            self._body, text=lang.t("btn_close"),
+            fg_color=T["accent"], hover_color=T["accent_dim"],
+            font=("Arial", 12, "bold"), height=34,
+            command=self.destroy,
+        ).pack(fill="x")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -863,8 +922,9 @@ class SettingsPopup(ctk.CTkToplevel):
         self._drag_ox = 0
         self._drag_oy = 0
 
-        px = parent.winfo_x() + (parent.winfo_width()  - self._POPUP_W) // 2
-        py = parent.winfo_y() + max(0, (parent.winfo_height() - self._POPUP_H) // 2)
+        parent.update_idletasks()
+        px = parent.winfo_rootx() + (parent.winfo_width()  - self._POPUP_W) // 2
+        py = parent.winfo_rooty() + max(0, (parent.winfo_height() - self._POPUP_H) // 2)
         self.geometry(f"{self._POPUP_W}x{self._POPUP_H}+{px}+{py}")
 
         self._build_ui()
@@ -873,9 +933,7 @@ class SettingsPopup(ctk.CTkToplevel):
 
     def _apply_round(self):
         hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
-        rgn = ctypes.windll.gdi32.CreateRoundRectRgn(
-            0, 0, self._POPUP_W, self._POPUP_H, 14, 14)
-        ctypes.windll.user32.SetWindowRgn(hwnd, rgn, True)
+        _apply_dwm_round(hwnd, large=False)
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
@@ -1071,7 +1129,8 @@ class SettingsPopup(ctk.CTkToplevel):
         self._interval_slider = ctk.CTkSlider(
             body, from_=0, to=len(_isteps) - 1,
             number_of_steps=len(_isteps) - 1,
-            button_color=T["accent"], progress_color=T["accent"],
+            button_color=T["accent"], button_hover_color=T["primary"],
+            progress_color=T["accent"],
             command=self._on_interval_slide,
         )
         self._interval_slider.set(cur_ii)
@@ -1094,7 +1153,8 @@ class SettingsPopup(ctk.CTkToplevel):
         self._dur_slider = ctk.CTkSlider(
             body, from_=0, to=len(_dur_snaps) - 1,
             number_of_steps=len(_dur_snaps) - 1,
-            button_color=T["accent"], progress_color=T["accent"],
+            button_color=T["accent"], button_hover_color=T["primary"],
+            progress_color=T["accent"],
             command=self._on_dur_slide,
         )
         self._dur_slider.set(cur_di)
@@ -1230,7 +1290,7 @@ class ArtLapseApp(ctk.CTk):
         self.update_idletasks()
         import sys
         _base = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
-        self._ico_path = os.path.join(_base, "artlapse.ico")
+        self._ico_path = os.path.join(_base, "assets", "artlapse.ico")
         self.after(20, self._setup_taskbar_presence)
         self.after(20, self.apply_round_region)
 
@@ -1263,10 +1323,9 @@ class ArtLapseApp(ctk.CTk):
     # ------------------------------------------------------------------ #
     #  ROUNDED REGION                                                      #
     # ------------------------------------------------------------------ #
-    def apply_round_region(self, w=APP_W, h=APP_H):
+    def apply_round_region(self, _w=APP_W, _h=APP_H):
         hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
-        rgn  = ctypes.windll.gdi32.CreateRoundRectRgn(0, 0, w, h, 22, 22)
-        ctypes.windll.user32.SetWindowRgn(hwnd, rgn, True)
+        _apply_dwm_round(hwnd, large=True)
 
     # ------------------------------------------------------------------ #
     #  UI CONSTRUCTION                                                     #
@@ -1277,11 +1336,10 @@ class ArtLapseApp(ctk.CTk):
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
 
-        self._title_lbl = ctk.CTkLabel(
-            hdr, text="ARTLAPSE",
-            font=("Arial Black", 21, "bold"),
-            text_color=T["accent"]
-        )
+        _logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "ArtLapse_title.png")
+        _logo_pil  = Image.open(_logo_path)
+        _logo_img  = ctk.CTkImage(light_image=_logo_pil, dark_image=_logo_pil, size=(131, 34))
+        self._title_lbl = ctk.CTkLabel(hdr, text="", image=_logo_img)
         self._title_lbl.place(relx=0.5, rely=0.55, anchor="center")
         self._title_lbl.bind("<Button-1>",  self._click_window)
         self._title_lbl.bind("<B1-Motion>", self._drag_window)
@@ -1289,12 +1347,16 @@ class ArtLapseApp(ctk.CTk):
         # Cog button on the left
         left_frame = ctk.CTkFrame(hdr, fg_color="transparent")
         left_frame.place(relx=0.0, rely=0.5, anchor="w", x=8)
-        _cog_img = self._make_cog_image(size=20)
+        _cog_img = self._make_cog_image(size=20, color=T["muted"])
         self._cog_btn = ctk.CTkButton(
             left_frame, text="", image=_cog_img, width=28, height=28,
-            fg_color="transparent", hover_color=T["hover"],
+            fg_color="transparent", hover_color=T["bg"],
             corner_radius=6, command=self._open_settings)
         self._cog_btn.pack()
+        self._cog_btn.bind("<Enter>", lambda _e: self._cog_btn.configure(
+            image=self._make_cog_image(size=20, color=T["accent"])))
+        self._cog_btn.bind("<Leave>", lambda _e: self._cog_btn.configure(
+            image=self._make_cog_image(size=20, color=T["muted"])))
         self._bind_tooltip(self._cog_btn, lambda: lang.t("settings_title"))
 
         btn_frame = ctk.CTkFrame(hdr, fg_color="transparent")
@@ -1397,7 +1459,7 @@ class ArtLapseApp(ctk.CTk):
         self.slider_interval = ctk.CTkSlider(
             body, from_=0, to=len(self.INTERVAL_STEPS) - 1,
             number_of_steps=len(self.INTERVAL_STEPS) - 1,
-            button_color=T["accent"],
+            button_color=T["accent"], button_hover_color=T["primary"],
             progress_color=T["accent"],
             command=self._update_interval_label
         )
@@ -1424,6 +1486,7 @@ class ArtLapseApp(ctk.CTk):
             font=("Arial", 12),
             text_color=T["label"],
             checkbox_width=16, checkbox_height=16,
+            corner_radius=4,
             checkmark_color="white",
             fg_color=T["accent"], hover_color=T["accent_dim"],
             border_color=T["muted"],
@@ -1579,9 +1642,9 @@ class ArtLapseApp(ctk.CTk):
     def _apply_theme(self):
         """Re-color all tracked widgets to match the current theme T."""
         self.configure(fg_color=T["bg"])
-        self._title_lbl.configure(text_color=T["accent"])
-        self._cog_btn.configure(hover_color=T["hover"],
-                                image=self._make_cog_image(size=20, color=T["accent"]))
+
+        self._cog_btn.configure(hover_color=T["bg"],
+                                image=self._make_cog_image(size=20, color=T["muted"]))
         self._min_btn.configure(hover_color=T["hover"], text_color=T["primary"])
         self._tray_btn.configure(hover_color=T["hover"], text_color=T["accent"])
         self._close_btn.configure(text_color=T["primary"])
@@ -1625,14 +1688,16 @@ class ArtLapseApp(ctk.CTk):
 
     @staticmethod
     def _make_cog_image(size=22, color=None):
-        """Render a filled gear icon using PIL. Returns a CTkImage."""
+        """Render a filled gear icon using PIL with 4× supersampling. Returns a CTkImage."""
         if color is None:
             color = T["accent"]
-        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        scale = 4
+        s = size * scale
+        img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
-        cx, cy = size / 2, size / 2
+        cx, cy = s / 2, s / 2
         teeth = 8
-        r_outer = size / 2 - 0.5
+        r_outer = s / 2 - 0.5
         r_inner = r_outer * 0.78
         r_hole  = r_outer * 0.31
         tooth_half = math.pi / teeth * 0.42
@@ -1651,6 +1716,7 @@ class ArtLapseApp(ctk.CTk):
             [cx - r_hole, cy - r_hole, cx + r_hole, cy + r_hole],
             fill=(0, 0, 0, 0)
         )
+        img = img.resize((size, size), Image.LANCZOS)
         return ctk.CTkImage(light_image=img, size=(size, size))
 
     def _bind_tooltip(self, widget, text):
@@ -1753,11 +1819,14 @@ class ArtLapseApp(ctk.CTk):
         WS_EX_APPWINDOW  = 0x00040000
         WS_EX_TOOLWINDOW = 0x00000080
         hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+
         ex_style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
         ex_style &= ~WS_EX_TOOLWINDOW
         ex_style |=  WS_EX_APPWINDOW
         ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style)
-        import sys
+
+        # When frozen, iconbitmap(sys.executable) lets Windows read the icon
+        # directly from the exe's PE resources — sharp at all sizes.
         if getattr(sys, "frozen", False):
             self.iconbitmap(sys.executable)
         else:
@@ -1867,12 +1936,21 @@ class ArtLapseApp(ctk.CTk):
         default_idx = config.load_default_interval_idx()
         total_steps = len(self.INTERVAL_STEPS) - 1
         x = pad + int(track_w * default_idx / total_steps)
-        # Draw downward-pointing triangle
-        size = 5
-        c.create_polygon(
-            x, 8, x - size, 0, x + size, 0,
-            fill=T["accent"], outline=""
+        # Draw anti-aliased downward-pointing triangle via PIL supersampling
+        tri_w, tri_h = 11, 9
+        scale = 4
+        sw, sh = tri_w * scale, tri_h * scale
+        color = T["accent"]
+        tri_img = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+        tri_draw = ImageDraw.Draw(tri_img)
+        tri_draw.polygon(
+            [(sw // 2, sh - 1), (0, 0), (sw - 1, 0)],
+            fill=color,
         )
+        tri_img = tri_img.resize((tri_w, tri_h), Image.LANCZOS)
+        # Store on self to prevent GC
+        self._marker_photo = ImageTk.PhotoImage(tri_img)
+        c.create_image(x, 0, anchor="n", image=self._marker_photo)
 
     def _get_interval_seconds(self):
         idx = round(self.slider_interval.get())
@@ -1895,12 +1973,16 @@ class ArtLapseApp(ctk.CTk):
             init_qual_idx=config.load_default_export_quality_idx(),
         )
 
-    def _on_export_requested(self, duration_secs, crf_preset, quality_label, on_done_cb):
+    def _on_export_requested(self, duration_secs, crf_preset, quality_label,
+                             on_done_cb=None, on_progress_cb=None, on_success_cb=None, on_error_cb=None):
         self.compile_video(
             duration_secs=duration_secs,
             crf_preset=crf_preset,
             quality_label=quality_label,
             on_done_cb=on_done_cb,
+            on_progress_cb=on_progress_cb,
+            on_success_cb=on_success_cb,
+            on_error_cb=on_error_cb,
         )
 
     # "Native" → ("png", None)   "High" → ("jpg", 92)   etc.
@@ -1960,8 +2042,9 @@ class ArtLapseApp(ctk.CTk):
         dialog.wm_attributes("-topmost", True)
 
         dw, dh = 300, 160
-        cx = self.winfo_x() + (self.winfo_width()  - dw) // 2
-        cy = self.winfo_y() + (self.winfo_height() - dh) // 2
+        self.update_idletasks()
+        cx = self.winfo_rootx() + (self.winfo_width()  - dw) // 2
+        cy = self.winfo_rooty() + (self.winfo_height() - dh) // 2
         dialog.geometry(f"{dw}x{dh}+{cx}+{cy}")
         dialog.lift()
         dialog.grab_set()
@@ -2172,7 +2255,8 @@ class ArtLapseApp(ctk.CTk):
     # ------------------------------------------------------------------ #
     def compile_video(self, path_override=None,
                       duration_secs=None, crf_preset=None,
-                      quality_label=None, on_done_cb=None):
+                      quality_label=None, on_done_cb=None,
+                      on_progress_cb=None, on_success_cb=None, on_error_cb=None):
         path = path_override or self._resolve_project_path() or self.final_path
         if not path or not os.path.exists(path):
             self.status_label.configure(text=lang.t("status_select_export"), text_color="orange")
@@ -2219,21 +2303,31 @@ class ArtLapseApp(ctk.CTk):
         def on_done(size_mb, out_path):
             msg = f"Exported ✓  {n} frames · {dur_str} · {size_mb:.1f} MB"
             self.after(0, lambda: self.status_label.configure(text=msg, text_color=T["accent"]))
-            self.after(0, lambda: os.startfile(out_path))
+            if on_success_cb:
+                self.after(0, lambda: on_success_cb(out_path))
+            else:
+                self.after(0, lambda: os.startfile(out_path))
             if on_done_cb:
                 on_done_cb()
 
         def on_error(msg):
             self.after(0, lambda: self.status_label.configure(text=msg, text_color="red"))
+            if on_error_cb:
+                self.after(0, lambda: on_error_cb(msg))
             if on_done_cb:
                 on_done_cb()
 
         def on_finally():
             self.after(0, lambda: self.ffmpeg_btn.configure(state="normal"))
 
+        def on_progress(fraction):
+            if on_progress_cb:
+                self.after(0, lambda f=fraction: on_progress_cb(f))
+
         project_name = self._current_project or os.path.basename(path)
         export.run_export(path, pngs, fps, crf, preset, on_done, on_error, on_finally,
-                          project_name=project_name, quality_label=quality_label)
+                          project_name=project_name, quality_label=quality_label,
+                          on_progress=on_progress)
 
 
 if __name__ == "__main__":

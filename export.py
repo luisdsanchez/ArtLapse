@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import subprocess
 import threading
@@ -23,6 +24,7 @@ def run_export(
     on_finally: Callable[[], None],
     project_name:  str = "",
     quality_label: str = "",
+    on_progress:   Callable[[float], None] = None,  # fraction 0.0–1.0
 ):
     """
     Encodes frames in `path` into a named timelapse .mp4 using ffmpeg.
@@ -36,6 +38,8 @@ def run_export(
     name_part    = _safe(project_name)  if project_name  else "Project"
     quality_part = _safe(quality_label) if quality_label else "Export"
     out_file = os.path.join(path, f"Timelapse_{name_part}_{quality_part}.mp4")
+
+    total_frames = len(pngs)
 
     def run():
         concat_path = os.path.join(path, "_concat_list.txt")
@@ -60,13 +64,46 @@ def run_export(
                 "-movflags", "+faststart",
                 out_file,
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode == 0:
+
+            # CREATE_NO_WINDOW suppresses the CMD flash on Windows
+            creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            process = subprocess.Popen(
+                cmd,
+                stderr=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                text=True,
+                creationflags=creation_flags,
+            )
+
+            stderr_buf = []
+            partial = ""
+            while True:
+                chunk = process.stderr.read(256)
+                if not chunk:
+                    break
+                partial += chunk
+                # ffmpeg uses \r to overwrite the stats line — split on both
+                parts = re.split(r'[\r\n]', partial)
+                partial = parts[-1]  # keep incomplete last part
+                for part in parts[:-1]:
+                    stderr_buf.append(part)
+                    if on_progress and total_frames > 0:
+                        m = re.search(r'frame=\s*(\d+)', part)
+                        if m:
+                            fraction = min(int(m.group(1)) / total_frames, 1.0)
+                            on_progress(fraction)
+
+            process.wait()
+            if partial:
+                stderr_buf.append(partial)
+            stderr_lines = stderr_buf
+
+            if process.returncode == 0:
                 size_mb = os.path.getsize(out_file) / 1_048_576
-                on_done(size_mb, path)
+                on_done(size_mb, out_file)
             else:
                 on_error("ffmpeg error — check console")
-                print(result.stderr)
+                print("\n".join(stderr_lines))
         except Exception as e:
             on_error(str(e))
         finally:

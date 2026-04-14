@@ -6,7 +6,7 @@ a = Analysis(
     ['ArtLapse.py'],
     pathex=[],
     binaries=[(FFMPEG, '.')],
-    datas=[('artlapse.ico', '.')],
+    datas=[('assets', 'assets')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -36,5 +36,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['artlapse.ico'],
+    icon=['assets/artlapse.ico'],
 )

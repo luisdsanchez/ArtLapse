@@ -90,7 +90,10 @@ _STRINGS = {
         "tip_settings_auto_export":"Automatically exports a timelapse MP4\nwhen you stop a recording.",
 
         # ── Export popup ──────────────────────────────────────────────────
-        "export_title": "EXPORT OPTIONS",
+        "export_title":    "EXPORT OPTIONS",
+        "export_success":  "Exported successfully!",
+        "btn_open_folder": "Open Folder",
+        "btn_close":       "Close",
 
         # ── Settings popup ────────────────────────────────────────────────
         "settings_title":    "SETTINGS",
@@ -210,7 +213,10 @@ _STRINGS = {
         "tip_settings_auto_export":"Exporta automáticamente un MP4\ncuando detenés la grabación.",
 
         # ── Ventana de exportación ────────────────────────────────────────
-        "export_title": "OPCIONES DE EXPORTACIÓN",
+        "export_title":    "OPCIONES DE EXPORTACIÓN",
+        "export_success":  "¡Exportado exitosamente!",
+        "btn_open_folder": "Abrir carpeta",
+        "btn_close":       "Cerrar",
 
         # ── Ventana de ajustes ────────────────────────────────────────────
         "settings_title":    "AJUSTES",

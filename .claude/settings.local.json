@@ -28,7 +28,9 @@
       "Bash(rm -f ArtLapsev1.0.exe)",
       "Bash(rm -rf build)",
       "Bash(python -c \"import ArtLapse\")",
-      "Bash(python -c \"import lang; import config; print\\('lang ok'\\); lang.set_lang\\('es'\\); print\\(lang.t\\('btn_start'\\)\\); print\\(lang.t\\('section_target'\\)\\)\")"
+      "Bash(python -c \"import lang; import config; print\\('lang ok'\\); lang.set_lang\\('es'\\); print\\(lang.t\\('btn_start'\\)\\); print\\(lang.t\\('section_target'\\)\\)\")",
+      "Bash(python -c \"import cairosvg; print\\('ok'\\)\")",
+      "Bash(python -c \"import io; from PIL import Image; import base64; print\\('pil ok'\\)\")"
     ]
   }
 }
