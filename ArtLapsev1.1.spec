@@ -3,7 +3,7 @@
 FFMPEG = 'C:/Users/luisd/AppData/Local/Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-8.1-full_build/bin/ffmpeg.exe'
 
 a = Analysis(
-    ['ArtLapse.py'],
+    ['ArtSeq.py'],
     pathex=[],
     binaries=[(FFMPEG, '.')],
     datas=[('assets', 'assets')],

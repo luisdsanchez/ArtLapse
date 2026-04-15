@@ -1,5 +1,5 @@
 """
-ArtLapse — UI string translations.
+ArtSeq — UI string translations.
 
 Usage:
     import lang
@@ -80,7 +80,7 @@ _STRINGS = {
         # ── Tooltips ──────────────────────────────────────────────────────
         "tip_minimize":    "Minimize",
         "tip_tray":        "Hide to system tray",
-        "tip_quit":        "Quit ArtLapse",
+        "tip_quit":        "Quit ArtSeq",
         "tip_browse":      "Browse for output folder",
         "tip_open_folder": "Open folder in Explorer",
 

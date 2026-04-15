@@ -2,9 +2,9 @@ import os
 import customtkinter as ctk
 
 APP_VERSION  = "1.2.1"
-GITHUB_REPO  = "luisdsanchez/ArtLapse"
+GITHUB_REPO  = "luisdsanchez/ArtSeq"
 
-CONFIG_FILE  = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "ArtLapse", "config.json")
+CONFIG_FILE  = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "ArtSeq", "config.json")
 
 APP_W, APP_H = 400, 780
 

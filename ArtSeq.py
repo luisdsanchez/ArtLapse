@@ -22,7 +22,7 @@ from constants import T, set_theme as _set_theme, APP_W, APP_H
 def _make_app_icon(size=64) -> Image.Image:
     """Load the app icon from the bundled PNG asset."""
     _base = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
-    path  = os.path.join(_base, "assets", "ArtLapse_icon.png")
+    path  = os.path.join(_base, "assets", "ArtSeq_icon.png")
     return Image.open(path).convert("RGBA").resize((size, size), Image.LANCZOS)
 
 # Apply saved theme before any windows are created
@@ -1372,7 +1372,7 @@ class SettingsPopup(ctk.CTkToplevel):
         # ── Version footer ────────────────────────────────────────────────────
         ctk.CTkLabel(
             body,
-            text=f"ArtLapse V.{constants.APP_VERSION}  ·  By Luis Diego Sánchez",
+            text=f"ArtSeq V.{constants.APP_VERSION}  ·  By Luis Diego Sánchez",
             font=("Arial", 10),
             text_color=T["subtext"],
         ).pack(side="bottom", pady=(10, 2))
@@ -1495,11 +1495,11 @@ class SettingsPopup(ctk.CTkToplevel):
 #  MAIN APP
 # ══════════════════════════════════════════════════════════════════════════════
 
-class ArtLapseApp(ctk.CTk):
+class ArtSeqApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("ArtLapse")
+        self.title("ArtSeq")
         self.overrideredirect(True)
         self.attributes("-alpha", 0)
         self.geometry(f"{APP_W}x{APP_H}")
@@ -1583,11 +1583,11 @@ class ArtLapseApp(ctk.CTk):
         hdr.pack_propagate(False)
 
         _assets = os.path.dirname(os.path.abspath(__file__))
-        _logo_dark_pil  = Image.open(os.path.join(_assets, "assets", "ArtLapse_title.png"))
-        _logo_light_pil = Image.open(os.path.join(_assets, "assets", "ArtLapse_title_light.png"))
+        _logo_dark_pil  = Image.open(os.path.join(_assets, "assets", "ArtSeq_title.png"))
+        _logo_light_pil = Image.open(os.path.join(_assets, "assets", "ArtSeq_title_light.png"))
         self._logo_dark_pil  = _logo_dark_pil
         self._logo_light_pil = _logo_light_pil
-        _logo_img  = ctk.CTkImage(light_image=_logo_light_pil, dark_image=_logo_dark_pil, size=(131, 34))
+        _logo_img  = ctk.CTkImage(light_image=_logo_light_pil, dark_image=_logo_dark_pil, size=(130, 48))
         self._title_lbl = ctk.CTkLabel(hdr, text="", image=_logo_img)
         self._title_lbl.place(relx=0.5, rely=0.55, anchor="center")
         self._title_lbl.bind("<Button-1>",  self._click_window)
@@ -2108,12 +2108,12 @@ class ArtLapseApp(ctk.CTk):
 
     def _setup_tray(self):
         menu = pystray.Menu(
-            pystray.MenuItem("Show ArtLapse", self._tray_show, default=True),
+            pystray.MenuItem("Show ArtSeq", self._tray_show, default=True),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit", self._tray_quit),
         )
         icon_img = _make_app_icon(64)
-        self._tray_icon = pystray.Icon("ArtLapse", icon_img, "ArtLapse", menu)
+        self._tray_icon = pystray.Icon("ArtSeq", icon_img, "ArtSeq", menu)
         threading.Thread(target=self._tray_icon.run, daemon=True).start()
 
     def _tray_show(self, icon=None, item=None):
@@ -2612,7 +2612,7 @@ class ArtLapseApp(ctk.CTk):
 
 
 if __name__ == "__main__":
-    app = ArtLapseApp()
+    app = ArtSeqApp()
     _launch = config.load_launch_behavior()
     if _launch == "minimized":
         app.after(100, app._minimize)
