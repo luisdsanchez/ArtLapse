@@ -1,5 +1,5 @@
 """
-ArtLapse — auto-updater.
+ArtSeq — auto-updater.
 
 Flow:
     1. check_for_update() → (latest_version, download_url) or None
@@ -75,7 +75,7 @@ def download_and_swap(download_url: str, on_progress=None):
         return
 
     # 1. Download to temp
-    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".exe", prefix="ArtLapse_update_")
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".exe", prefix="ArtSeq_update_")
     os.close(tmp_fd)
     try:
         with requests.get(download_url, stream=True, timeout=60) as r:
@@ -100,11 +100,11 @@ def download_and_swap(download_url: str, on_progress=None):
         on_progress(1.0)
 
     # 2. Write a .bat that waits for us to exit, swaps files, then relaunches
-    bat_fd, bat_path = tempfile.mkstemp(suffix=".bat", prefix="ArtLapse_swap_")
+    bat_fd, bat_path = tempfile.mkstemp(suffix=".bat", prefix="ArtSeq_swap_")
     os.close(bat_fd)
     current_pid = os.getpid()
     exe_dir = os.path.dirname(os.path.abspath(current_exe))
-    # Derive the new filename from the asset URL (e.g. ArtLapsev1.2.exe)
+    # Derive the new filename from the asset URL (e.g. ArtSeqv1.2.exe)
     # so the renamed file matches the release name.
     new_exe_name = download_url.rstrip("/").split("/")[-1]
     if not new_exe_name.lower().endswith(".exe"):
